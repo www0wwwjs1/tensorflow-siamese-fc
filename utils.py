@@ -1,14 +1,15 @@
 # Suofei ZHANG, 2017.
-# import scipy.io as sio
+
 import numpy as np
-import pickle
-import h5py
-import hdf5storage as hdf
+import cPickle as pickle
+# import h5py
+# import hdf5storage as hdf
+# import scipy.io as sio
 
 def configParams():
     params = {}
 
-    print("Utils init")
+    print("config parameters...")
 
     params['gpuId'] = 0
     params['video'] = ""
@@ -35,74 +36,211 @@ def configParams():
     params['net_base_path'] = "models/"
     params['seq_base_path'] = "demo-sequences/"
     params['data_path'] = "/media/zhang/zhang/data/"
-    params['curation_path'] = "/media/zhang/work/work/DeepProjs/siamese-net/siamese-fc/ILSVRC15-curation/"
+    params['ilsvrc2015'] = params['data_path']+"ILSVRC2015/"
+    params['crops_path'] = params['data_path']+"ILSVRC2015_CROPS/"
+    params['crops_train'] = params['crops_path']+"Data/VID/train/"
+    params['curation_path'] = "./ILSVRC15-curation/"
 
     return params
 
-def loadImdbFromMat(imdbPath):
-    # imdb = sio.loadmat(imdbPath)
-    # imdbMat = h5py.File(imdbPath)
-    imdbMat = hdf.loadmat(imdbPath, 'r')
+# there maybe more than one target in the same video, in this case, the field 'objects' has an ImdbObjects entry for all targets in the video
+# the field 'valid_trackids' and 'valid_per_trackid' also have more than one entry at current column
+# the value of Imdb.id starts from 1, other indices start from 0
+class Imdb:
+    id = None
+    nframes = None
+    path = None
 
-    imdb = Imdb()
+    n_valid_objects = None
+    valid_trackids = None
 
-    for i in range(0, imdbMat['id'].shape[0]):
-        imdb.id[i] = imdbMat['id'][i][0]
-        imdb.n_valid_objects[i] = imdbMat['n_valid_objects'][i][0]
-        imdb.nframes[i] = imdbMat['n_valid_objects'][i][0]
+    total_valid_objects = np.uint32(0)
 
-        mPath = imdbMat['path'][i][0]
+    objects = []
+    valid_per_trackid = []
 
-        # mObjs = imdbMat['objects'][i]
-        # imdbObjs = None
-        # for j in range(0, mObjs.shape[0]):
-        #     mObj = mObjs[j]
-        #     a = mObj['track_id']
-        #     imdbObj = ImdbObject(mObj['track_id'][0], mObj['class'][0], mObjs['valid'][0], mObj['frame_path'][0])
+    def __init__(self, numVideos=None, maxTrackIds=None, _id=None, _nframes=None, _path=None):
+        if (not numVideos is None) and (not _id is None):
+            self.id = _id
+            self.nframes = _nframes
+            self.path = _path
 
+            self.n_valid_objects = np.zeros(numVideos, dtype=np.uint32)
+            self.valid_trackids = np.zeros([maxTrackIds, numVideos], dtype=np.uint32)
 
+# an ImdbObjects corresponds to a video containing frames
+# there maybe more than one target in the same video, in this case, the field of 'track_id' should be like [0, 1, 2, 0, 1, 2,...], each entry corresponds to a row in other fields
+class ImdbObjects:
+    track_id = None
+    oClass = None
+    frames_sz = None
+    extent = None
+    valid = None
+    frame_path = None
 
+    def __init__(self, _track_id = None, _oclass = None, _frame_sz = None, _extent = None, _valid = None, _frame_path = None):
+        self.track_id = np.array(_track_id)
+        self.oClass = np.array(_oclass)
+        self.frames_sz = np.array(_frame_sz)
+        self.extent = np.array(_extent)
+        self.valid = np.array(_valid)
+        self.frame_path = _frame_path
 
+def deleteFromImdb(imdb, idx):
+    imdb.id = np.delete(imdb.id, idx)
+    numDelete = np.sum(imdb.n_valid_objects[idx])
+    imdb.n_valid_objects = np.delete(imdb.n_valid_objects, idx)
+    imdb.nframes = np.delete(imdb.nframes, idx)
+    imdb.total_valid_objects -= numDelete
+    imdb.valid_trackids = np.delete(imdb.valid_trackids, idx, 1)
 
+    upper = len(imdb.objects)
 
-
-
-
-
-
+    for i in range(len(idx)-1, -1, -1):
+        if idx[i] < upper:
+            del imdb.objects[idx[i]]
+            del imdb.path[idx[i]]
+            del imdb.valid_per_trackid[idx[i]]
 
     return imdb
 
-class Imdb:
-    id = None
-    n_valid_objects = None
-    nframes = None
-    objects = None
-    path = None
-    total_valid_objects = 0
-    valid_per_trackid = None
-    valid_trackids = None
+# the functions is a python implementation of the function imdb_video = vid_setup_data(root) in original siamese-fc
+# it collects all information from imagenet vid, cooking the imdb data
+def vidSetupData(curation_path, root, crops_train):
+    rootPath = root+"Data/VID/train/"
+    MAX_TRACKIDS = 50;
+    framesIdPath = curation_path+"vid_id_frames.txt"
 
-    def __init__(self):
-        self.id = np.zeros(4404, dtype=np.uint32)
-        self.n_valid_objects = np.zeros(4404, dtype=np.uint32)
-        self.nframes = np.zeros(4404, dtype=np.uint32)
+    videoPaths = []
+    videoIds = []
+    videoNFrames = []
 
-class ImdbObject:
-    track_id = 0
-    mclass = 17
-    frames_sz = None
-    extent = None
-    valid = 0
-    frame_path = ""
+    with open(framesIdPath, 'r') as vidFiles:
+        while True:
+            line = vidFiles.readline()
+            if not line:
+                break
 
-    def __init__(self, _track_id, _mclass, _valid, _frame_path):
-        self.track_id = _track_id
-        self.mclass = _mclass
-        self.valid = _valid
-        self.frame_path = _frame_path
-        self.frames_sz = np.zeros(2, dtype=np.uint32)
-        self.extent = np.zeros(4, dtype=np.uint32)
+            videoPath, videoId, videoNFrame = [str for str in line.split(' ')]
+            videoPaths.append(videoPath)
+            videoIds.append(np.uint32(videoId))
+            videoNFrames.append(np.uint32(videoNFrame))
+
+        vidFiles.close()
+        videoIds = np.array(videoIds)
+        videoNFrames = np.array(videoNFrames)
+
+    nVideos = videoIds.shape[0]
+    imdb = Imdb(nVideos, MAX_TRACKIDS, videoIds, videoNFrames, videoPaths)
+
+    for i in range(0, 11):      #nVideos
+        print "Objects from video %d" % i + "/%d" % nVideos
+
+        with open(rootPath+imdb.path[i]+".txt", 'r') as vidFile:
+            trackIds = []
+            oClasses = []
+            framesSize = []
+            extents = []
+            valids = []
+            framePathes = []
+            validPerTrackids = []
+            targetIdx = 0       #targetIdx here corresponds to l in the Matlab version, however targetIdx starts from 0 rather than 1
+            validPerTrackidPath = ""
+
+            while True:
+                line = vidFile.readline()
+                if (not line) or (len(line) < 1):
+                    break
+
+                trackId, oClass, frameW, frameH, oXMins, oYMinx, oWs, ohS, framePath = [str for str in line.split(',')]
+
+                trackId = np.uint8(trackId)
+                trackIds.append(trackId)
+                oClasses.append(np.uint8(oClass))
+                frameW = np.uint16(frameW)
+                frameH = np.uint16(frameH)
+                framesSize.append([frameW, frameH])
+                oXMins = np.int16(oXMins)
+                oYMinx = np.int16(oYMinx)
+                oWs = np.int16(oWs)
+                ohS = np.int16(ohS)
+                extents.append([oXMins, oYMinx, oWs, ohS])
+                valids.append(np.bool(1))
+                _, framePath = [str for str in framePath.split("train/")]
+                framePath, _ = [str for str in framePath.split("\n")]
+                framePathes.append(framePath)
+
+                if True:        #if valids[length(valids)-1] == True
+                    imdb.n_valid_objects[i] += 1
+                    imdb.valid_trackids[trackId, i] += 1
+                    if trackId+1 > len(validPerTrackids):
+                        tmp = []
+                        tmp.append(np.uint16(targetIdx))
+                        validPerTrackids.append(tmp)
+                    else:
+                        validPerTrackids[trackId].append(np.uint16(targetIdx))
+
+                targetIdx += 1
+
+            imdbObjects = ImdbObjects(trackIds, oClasses, framesSize, extents, valids, framePathes)
+            imdb.objects.append(imdbObjects)
+            imdb.valid_per_trackid.append(validPerTrackids)
+            imdb.total_valid_objects += imdb.n_valid_objects[i]
+
+            vidFile.close()
+            print "Found %d" % imdb.n_valid_objects[i] + " valid objects in %d" % imdb.nframes[i] + " frames"
+
+    toDelete = np.where(imdb.n_valid_objects < 2)[0]
+    imdb = deleteFromImdb(imdb, toDelete)
+    toDelete = np.unique(np.where(imdb.valid_trackids == 1)[1])
+    imdb = deleteFromImdb(imdb, toDelete)
+
+    saveImdbToPkl(imdb, curation_path, crops_train)
+    return imdb
+
+def saveImdbToPkl(imdb, curation_path, crops_train):
+    with open(curation_path+"imdb.pkl", 'w') as imdbFile:
+        pickle.dump(imdb, imdbFile)
+        imdbFile.close()
+
+    for i in range(0, imdb.id.shape[0]):
+        with open(crops_train+imdb.path[i]+"/object.pkl", 'w') as objFile:
+            pickle.dump(imdb.objects[i], objFile)
+            objFile.close()
+
+        for j in range(0, len(imdb.valid_per_trackid[i])):
+            with open(crops_train+imdb.path[i]+"/trackid_%d" % j+".pkl", 'w') as idFile:
+                pickle.dump(imdb.valid_per_trackid[i][j], idFile)
+                idFile.close()
+
+    # validPerTrackidPath = validPerTrackidPath + imdb.path[i] + "/trackid_%d" % targetIdx + ".pkl;"
+
+
+
+def loadImdbFromPkl(curation_path, crops_train):
+    imdb = Imdb()
+    with open(curation_path+"imdb.pkl", 'r') as imdbFile:
+        imdb = pickle.load(imdbFile)
+
+    imdb.objects = []
+    for i in range(0, imdb.id.shape[0]):
+        imdbObject = ImdbObjects()
+        with open(crops_train+imdb.path[i]+"/object.pkl", 'r') as objFile:
+            imdbObject = pickle.load(objFile)
+            imdb.objects.append(imdbObject)
+
+        trackIdNum = np.where(imdb.valid_trackids[:, i] == 0)[0][0]
+        validPerTrackids = []
+
+        for j in range(0, trackIdNum):
+            with open(crops_train+imdb.path[i]+"/trackid_%d" % j+".pkl", 'r') as idFile:
+                validPerTrackid = pickle.load(idFile)
+                validPerTrackids.append(validPerTrackid)
+                idFile.close()
+
+        imdb.valid_per_trackid.append(validPerTrackids)
+
+    return imdb
 
 
 
@@ -111,6 +249,50 @@ class ImdbObject:
 
 
 
-def convertImdbFromMat(imdbPath, rawPath):
-    imdb = loadImdbFromMat()
-    pickle.dump(imdb, open(rawPath, mode='wb'), protocol=pickle.HIGHEST_PROTOCOL)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# load mat data from imdb.mat is impossible, this function is deprecated
+# def loadImdbFromMat(imdbPath):
+#     # imdb = sio.loadmat(imdbPath)
+#     # imdbMat = h5py.File(imdbPath)
+#     imdbMat = hdf.loadmat(imdbPath, 'r')
+#
+#     imdb = Imdb()
+#
+#     for i in range(0, imdbMat['id'].shape[0]):
+#         imdb.id[i] = imdbMat['id'][i][0]
+#         imdb.n_valid_objects[i] = imdbMat['n_valid_objects'][i][0]
+#         imdb.nframes[i] = imdbMat['n_valid_objects'][i][0]
+#
+#         mPath = imdbMat['path'][i][0]
+#
+#         mObjs = imdbMat['objects'][i]
+#         imdbObjs = None
+#         for j in range(0, mObjs.shape[0]):
+#             mObj = mObjs[j]
+#             a = mObj['track_id']
+#             imdbObj = ImdbObject(mObj['track_id'][0], mObj['class'][0], mObjs['valid'][0], mObj['frame_path'][0])
+#
+#     return imdb
+
+# def convertImdbFromMat(imdbPath, rawPath):
+#     imdb = loadImdbFromMat()
+#     pickle.dump(imdb, open(rawPath, mode='wb'), protocol=pickle.HIGHEST_PROTOCOL)
+
+
