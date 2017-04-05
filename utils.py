@@ -6,43 +6,6 @@ import cPickle as pickle
 # import hdf5storage as hdf
 # import scipy.io as sio
 
-def configParams():
-    params = {}
-
-    print("config parameters...")
-
-    params['gpuId'] = 0
-    params['video'] = ""
-    params['numScale'] = 3
-    params['scaleStep'] = 1.0375
-    params['scalePenalty'] = 0.9745
-    params['scaleLR'] = 0.59
-    params['responseUp'] = 16
-    params['windowing'] = "cosine"
-    params['wInfluence'] = 0.176
-    params['netFile'] = ""
-    params['exemplarSize'] = 127
-    params['instanceSize'] = 255
-    params['scoreSize'] = 17
-    params['totalStride'] = 8
-    params['contextAmount'] = 0.5
-    params['subMean'] = 0
-    params['prefix_z'] = "a_"
-    params['prefix_x'] = "b_"
-    params['prefix_join'] = "xcorr"
-    params['prefix_adj'] = "adjust"
-    params['id_feat_z'] = "a_feat"
-    params['id_score'] = "score"
-    params['net_base_path'] = "models/"
-    params['seq_base_path'] = "demo-sequences/"
-    params['data_path'] = "/media/zhang/zhang/data/"
-    params['ilsvrc2015'] = params['data_path']+"ILSVRC2015/"
-    params['crops_path'] = params['data_path']+"ILSVRC2015_CROPS/"
-    params['crops_train'] = params['crops_path']+"Data/VID/train/"
-    params['curation_path'] = "./ILSVRC15-curation/"
-
-    return params
-
 # there maybe more than one target in the same video, in this case, the field 'objects' has an ImdbObjects entry for all targets in the video
 # the field 'valid_trackids' and 'valid_per_trackid' also have more than one entry at current column
 # the value of Imdb.id starts from 1, other indices start from 0
@@ -133,7 +96,7 @@ def vidSetupData(curation_path, root, crops_train):
     nVideos = videoIds.shape[0]
     imdb = Imdb(nVideos, MAX_TRACKIDS, videoIds, videoNFrames, videoPaths)
 
-    for i in range(0, 11):      #nVideos
+    for i in range(0, nVideos):      #nVideos
         print "Objects from video %d" % i + "/%d" % nVideos
 
         with open(rootPath+imdb.path[i]+".txt", 'r') as vidFile:
