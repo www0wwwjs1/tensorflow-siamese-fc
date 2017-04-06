@@ -18,6 +18,25 @@ def inference(_instance):
 def train(params):
     return
 
+def buildNetwork(exemplar, instance, isTraining):
+    with tf.variable_scope('siamese') as scope:
+        aFeat = buildBranch(exemplar, isTraining)
+        score = buildBranch(instance, isTraining)
+        scope.reuse_variables()
+
+        # 直接用tf的conv2d来实现xcorr，从原理上讲，conv2d就是互相关，就是要把滤波器tensor转置一下，变成一个weights的tensor，但是不知道会不会有问题，先写出来再说了
+        print "Building xcorr..."
+        aFeat = tf.transpose(aFeat, perm=[1, 2, 3, 0])
+        bFaet = tf.nn.conv2d(score, aFeat, strides=[1, 1, 1, 1])
+
+        print "Building adjust..."
+        weights = tf.get_variable('weights', [1, 1, 1, 1], initializer=tf.constant_initializer(value=0.001, dtype=tf.float32))
+        biases = tf.get_variable('biases', [1, ], initializer=tf.constant_initializer(value=0, dtype=tf.float32))
+        score = tf.nn.conv2d(bFaet, weights, strides=[1, 1, 1, 1])
+        score = tf.add(score, biases)
+
+    return score
+
 def buildBranch(inputs, isTraining):
     print "Building Siamese branches..."
 
@@ -59,10 +78,10 @@ def conv(inputs, channels, filters, size, stride):
     biases = tf.get_variable('biases', [filters,], initializer=tf.constant_initializer(value=0.1, dtype=tf.float32))
 
     conv = tf.nn.conv2d(inputs, weights, strides=[1, stride, stride, 1])
-    conv_biased = tf.add(conv, biases)
+    conv = tf.add(conv, biases)
     print 'Layer Type = Conv, Size = %d * %d, Stride = %d, Filters = %d, Input channels = %d' % (size, size, stride, filters, channels)
 
-    return conv_biased
+    return conv
 
 def batchNormalization(inputs, isTraining):
     xShape = inputs.get_shape()
