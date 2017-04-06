@@ -18,13 +18,40 @@ def inference(_instance):
 def train(params):
     return
 
-def buildBranch(inputs, params):
+def buildBranch(inputs, isTraining):
     print "Building Siamese branches..."
 
     with tf.variable_scope('scala1'):
-        print "Building conv1, bn1, pooling1..."
-        conv1 = conv(inputs, 3, 96, 11, 2)
-        bn1 = batchNormalization(conv1, params['bn_is_training'])
+        print "Building conv1, bn1, relu1, pooling1..."
+        outputs = conv(inputs, 3, 96, 11, 2)
+        outputs = batchNormalization(outputs, isTraining)
+        outputs = tf.nn.relu(outputs)
+        outputs = maxPool(outputs, 3, 2)
+
+    with tf.variable_scope('scala2'):
+        print "Building conv2, bn2, relu2, pooling2..."
+        outputs = conv(outputs, 48, 5, 256, 1)
+        outputs = batchNormalization(outputs, isTraining)
+        outputs = tf.nn.relu(outputs)
+        outputs = maxPool(outputs, 3, 2)
+
+    with tf.variable_scope('scala3'):
+        print "Building conv3, bn3, relu3..."
+        outputs = conv(outputs, 256, 3, 384, 1)
+        outputs = batchNormalization(outputs, isTraining)
+        outputs = tf.nn.relu(outputs)
+
+    with tf.variable_scope('scala4'):
+        print "Building conv4, bn4, relu4..."
+        outputs = conv(outputs, 192, 3, 384, 1)
+        outputs = batchNormalization(outputs, isTraining)
+        outputs = tf.nn.relu(outputs)
+
+    with tf.variable_scope('scala5'):
+        print "Building conv5..."
+        outputs = conv(outputs, 192, 3, 256, 1)
+
+    return outputs
 
 def conv(inputs, channels, filters, size, stride):
     # xavier初始化和截断正态分布初始化，matlab版本用的是一种改进的xavier初始化，如果训练不行，这里可能要调
@@ -59,6 +86,9 @@ def batchNormalization(inputs, isTraining):
     print 'Layer type = batch_norm'
 
     return bn
+
+def maxPool(inputs, kSize, _stride):
+    return tf.nn.max_pool(inputs, ksize=[1, kSize, kSize, 1], stride=[1, _stride, _stride, 1], padding='VALID')
 
 
 
