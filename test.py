@@ -18,6 +18,7 @@ import tensorflow as tf
 print(tf.__version__)
 # test = tf.contrib.image.rotate
 print(tf.__path__)
+beta = tf.get_variable('beta', [96], initializer=tf.constant_initializer(value=0, dtype=tf.float32))
 sess = tf.Session()
 #
 # sess.run(test)

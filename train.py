@@ -45,8 +45,9 @@ def getEig(mat):
 def loadStats(path):
     imgStats = utils.loadImageStats(path)
 
-    if not imgStats.has_key('z'):
+    if 'z' not in imgStats:
         print("to implement...")
+        return
     else:
         rgbMeanZ = np.reshape(imgStats['z']['rgbMean'], [1, 1, 3])
         rgbMeanX = np.reshape(imgStats['x']['rgbMean'], [1, 1, 3])
@@ -54,8 +55,7 @@ def loadStats(path):
         rgbVarZ = 0.1*np.dot(np.sqrt(d), v.T)
         d, v = getEig(imgStats['x']['rgbCovariance'])
         rgbVarX = 0.1*np.dot(np.sqrt(d), v.T)
-
-    return rgbMeanZ, rgbVarZ, rgbMeanX, rgbVarX
+        return rgbMeanZ, rgbVarZ, rgbMeanX, rgbVarX
 
 def main(_):
     params = configParams()

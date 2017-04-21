@@ -1,7 +1,7 @@
 # Suofei ZHANG, 2017.
 
 import numpy as np
-import _pickle as pickle
+import pickle
 # import h5py
 # import hdf5storage as hdf
 import scipy.io as sio
@@ -182,22 +182,22 @@ def saveImdbToPkl(imdb, curation_path, crops_train):
 
 def loadImdbFromPkl(curation_path, crops_train):
     imdb = Imdb()
-    with open(curation_path+"imdb.pkl", 'r') as imdbFile:
-        imdb = pickle.load(imdbFile)
+    with open(curation_path+"imdb.pkl", 'rb') as imdbFile:
+        imdb = pickle.load(imdbFile, encoding='iso-8859-1')
 
     imdb.objects = []
     for i in range(0, imdb.id.shape[0]):
         imdbObject = ImdbObjects()
-        with open(crops_train+imdb.path[i]+"/object.pkl", 'r') as objFile:
-            imdbObject = pickle.load(objFile)
+        with open(crops_train+imdb.path[i]+"/object.pkl", 'rb') as objFile:
+            imdbObject = pickle.load(objFile, encoding='iso-8859-1')
             imdb.objects.append(imdbObject)
 
         trackIdNum = np.where(imdb.valid_trackids[:, i] == 0)[0][0]
         validPerTrackids = []
 
         for j in range(0, trackIdNum):
-            with open(crops_train+imdb.path[i]+"/trackid_%d" % j+".pkl", 'r') as idFile:
-                validPerTrackid = pickle.load(idFile)
+            with open(crops_train+imdb.path[i]+"/trackid_%d" % j+".pkl", 'rb') as idFile:
+                validPerTrackid = pickle.load(idFile, encoding='iso-8859-1')
                 validPerTrackids.append(validPerTrackid)
                 idFile.close()
 
@@ -223,15 +223,15 @@ def loadImageStatsFromMat(path):
     imgStats['z']['rgbMean'] = imgStatsMat['rgbMear']
     imgStats['z']['rgbCovariance'] = imgStatsMat['rgbCovariance']
 
-    with open(path + "imageStats.pkl", 'w') as imgStatsFile:
-        pickle.dump(imgStats, imgStatsFile)
+    with open(path + "imageStats.pkl", 'wb') as imgStatsFile:
+        pickle.dump(imgStats, imgStatsFile, encoding='iso-8859-1')
         imgStatsFile.close()
 
     return imgStatsMat
 
 def loadImageStats(path):
-    with open(path+"imageStats.pkl", 'r') as imgStatsFile:
-        imgStats = pickle.load(imgStatsFile)
+    with open(path+"imageStats.pkl", 'rb') as imgStatsFile:
+        imgStats = pickle.load(imgStatsFile, encoding='iso-8859-1')
 
     return imgStats
 

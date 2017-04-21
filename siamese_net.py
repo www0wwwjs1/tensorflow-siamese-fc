@@ -95,7 +95,7 @@ def conv1(inputs, channels, filters, size, stride):
     weights = tf.get_variable('weights', [size, size, channels, filters], initializer=tf.contrib.layers.xavier_initializer(), dtype=tf.float32)
     biases = tf.get_variable('biases', [filters,], initializer=tf.constant_initializer(value=0.1, dtype=tf.float32))
 
-    conv = tf.nn.conv2d(inputs, weights, strides=[1, stride, stride, 1])
+    conv = tf.nn.conv2d(inputs, weights, strides=[1, stride, stride, 1], padding='VALID')
     conv = tf.add(conv, biases)
     print('Layer Type = Conv, Size = %d * %d, Stride = %d, Filters = %d, Input channels = %d' % (size, size, stride, filters, channels))
 
@@ -125,10 +125,10 @@ def batchNormalization(inputs, isTraining):
     paramsShape = xShape[-1:]
     axis = list(range(len(xShape)-1))
 
-    beta = tf.get_variable('beta', paramsShape, initializer=tf.zeros_initializer)
-    gamma = tf.get_variable('gamma', paramsShape, initializer=tf.ones_initializer)
-    movingMean = tf.get_variable('moving_mean', paramsShape, initializer=tf.zeros_initializer, trainable=False)
-    movingVariance = tf.get_variable('moving_variance', paramsShape, initializer=tf.ones_initializer, trainable=False)
+    beta = tf.get_variable('beta', paramsShape, initializer=tf.constant_initializer(value=0, dtype=tf.float32))
+    gamma = tf.get_variable('gamma', paramsShape, initializer=tf.constant_initializer(value=1, dtype=tf.float32))
+    movingMean = tf.get_variable('moving_mean', paramsShape, initializer=tf.constant_initializer(value=0, dtype=tf.float32), trainable=False)
+    movingVariance = tf.get_variable('moving_variance', paramsShape, initializer=tf.constant_initializer(value=1, dtype=tf.float32), trainable=False)
 
     mean, variance = tf.nn.moments(inputs, axis)
     updateMovingMean = moving_averages.assign_moving_average(movingMean, mean, MOVING_AVERAGE_DECAY)
