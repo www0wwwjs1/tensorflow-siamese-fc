@@ -1,10 +1,10 @@
 # Suofei ZHANG, 2017.
 
 import numpy as np
-import cPickle as pickle
+import _pickle as pickle
 # import h5py
 # import hdf5storage as hdf
-# import scipy.io as sio
+import scipy.io as sio
 
 # there maybe more than one target in the same video, in this case, the field 'objects' has an ImdbObjects entry for all targets in the video
 # the field 'valid_trackids' and 'valid_per_trackid' also have more than one entry at current column
@@ -97,7 +97,7 @@ def vidSetupData(curation_path, root, crops_train):
     imdb = Imdb(nVideos, MAX_TRACKIDS, videoIds, videoNFrames, videoPaths)
 
     for i in range(0, nVideos):      #nVideos
-        print "Objects from video %d" % i + "/%d" % nVideos
+        print("Objects from video %d" % i + "/%d" % nVideos)
 
         with open(rootPath+imdb.path[i]+".txt", 'r') as vidFile:
             trackIds = []
@@ -151,7 +151,7 @@ def vidSetupData(curation_path, root, crops_train):
             imdb.total_valid_objects += imdb.n_valid_objects[i]
 
             vidFile.close()
-            print "Found %d" % imdb.n_valid_objects[i] + " valid objects in %d" % imdb.nframes[i] + " frames"
+            print("Found %d" % imdb.n_valid_objects[i] + " valid objects in %d" % imdb.nframes[i] + " frames")
 
     toDelete = np.where(imdb.n_valid_objects < 2)[0]
     imdb = deleteFromImdb(imdb, toDelete)
@@ -205,22 +205,35 @@ def loadImdbFromPkl(curation_path, crops_train):
 
     return imdb
 
+def loadImageStatsFromMat(path):
+    imgStats = {}# ImgStats()
 
+    imgStatsMat = sio.loadmat(path+"x.mat")
+    imgStats['x'] = {}
+    imgStats['x']['averageImage'] = imgStatsMat['averageImage']
+    imgStats['x']['rgbm1'] = imgStatsMat['rgbm1']
+    imgStats['x']['rgbMean'] = imgStatsMat['rgbMear']
+    imgStats['x']['rgbCovariance'] = imgStatsMat['rgbCovariance']
 
+    imgStatsMat = sio.loadmat(path + "z.mat")
+    imgStats['z'] = {}
+    imgStats['z']['averageImage'] = imgStatsMat['averageImage']
+    imgStats['z']['rgbm1'] = imgStatsMat['rgbm1']
+    imgStats['z']['rgbm2'] = imgStatsMat['rgbm2']
+    imgStats['z']['rgbMean'] = imgStatsMat['rgbMear']
+    imgStats['z']['rgbCovariance'] = imgStatsMat['rgbCovariance']
 
+    with open(path + "imageStats.pkl", 'w') as imgStatsFile:
+        pickle.dump(imgStats, imgStatsFile)
+        imgStatsFile.close()
 
+    return imgStatsMat
 
+def loadImageStats(path):
+    with open(path+"imageStats.pkl", 'r') as imgStatsFile:
+        imgStats = pickle.load(imgStatsFile)
 
-
-
-
-
-
-
-
-
-
-
+    return imgStats
 
 
 

@@ -7,3 +7,7 @@ A Matlab version can be found at [siamese-fc](https://github.com/bertinetto/siam
 
 ref: Fully-Convolutional Siamese Networks for Object Tracking
 - - - -
+
+python: 3.4
+
+tensorflow: 1.0.1
