@@ -1,11 +1,13 @@
 # Suofei ZHANG, 2017.
 
 import tensorflow as tf
-from tensorflow.python.ops import control_flow_ops
-from tensorflow.python.training import moving_averages
+from parameters import configParams
 
-MOVING_AVERAGE_DECAY = 0        #only siamese-net in matlab uses 0 here, other projects with tensorflow all use 0.999 here, from some more documents, I think 0.999 is more probable here, since tensorflow uses a equation as 1-decay for this parameter
-UPDATE_OPS_COLLECTION = 'resnet_update_ops'
+# from tensorflow.python.ops import control_flow_ops
+# from tensorflow.python.training import moving_averages
+
+# MOVING_AVERAGE_DECAY = 0        #only siamese-net in matlab uses 0 here, other projects with tensorflow all use 0.999 here, from some more documents, I think 0.999 is more probable here, since tensorflow uses a equation as 1-decay for this parameter
+# UPDATE_OPS_COLLECTION = 'resnet_update_ops'
 
 # def inference(_instance):
 #     # input of network z
@@ -19,6 +21,8 @@ UPDATE_OPS_COLLECTION = 'resnet_update_ops'
 #     return
 
 def buildNetwork(exemplar, instance, isTraining):
+    params = configParams()
+
     with tf.variable_scope('siamese') as scope:
         aFeat = buildBranch(exemplar, isTraining)
         scope.reuse_variables()
@@ -26,18 +30,31 @@ def buildNetwork(exemplar, instance, isTraining):
 
         # the conv2d op in tf is used to implement xcorr directly, from theory, the implementation of conv2d is correlation. However, it is necessary to transpose the weights tensor to a input tensor
         # different scales are tackled with slicing the data. Now only 3 scales are considered, but in training, more samples in a batch is also tackled by the same mechanism. Hence more slices is to be implemented here!!
-    with tf.variable_scope('scorr'):
+    with tf.variable_scope('score'):
         print("Building xcorr...")
         groupConv = lambda i, k: tf.nn.conv2d(i, k, strides=[1, 1, 1, 1], padding='VALID')
         aFeat = tf.transpose(aFeat, perm=[1, 2, 3, 0])
-        shapeAFeat = aFeat.get_shape()
-        if int(shapeAFeat[-1]) > 1:
-            aFeats = tf.split(axis=3, num_or_size_splits=shapeAFeat[-1], value=aFeat)
+        batchAFeat = int(aFeat.get_shape()[-1])
+        batchScore = int(score.get_shape()[0])
+        if batchAFeat > 1:
+            assert batchAFeat == params['trainBatchSize']
+            assert batchScore == params['trainBatchSize']
 
-        scores = tf.split(axis=3, num_or_size_splits=score.get_shape()[-1], value=score)
-        scores = [groupConv(i, k) for i, k in zip(scores, aFeats)]
+            aFeats = tf.split(axis=3, num_or_size_splits=batchAFeat, value=aFeat)
+            scores = tf.split(axis=0, num_or_size_splits=batchScore, value=score)
+            scores = [groupConv(i, k) for i, k in zip(scores, aFeats)]
 
-        score = tf.concat(axis=3, values=scores)
+            score = tf.concat(axis=3, values=scores)
+        else:
+            assert batchAFeat == 1
+            assert batchScore == params['numScale']
+
+            scores = tf.split(axis=0, num_or_size_splits=batchScore, value=score)
+            for i in range(batchScore):
+                scores1 = []
+                scores1.append(tf.nn.conv2d(scores[i], aFeat, strides=[1, 1, 1, 1], padding='VALID'))
+
+            score = tf.concat(axis=0, values=scores1)
 
         # shapeAFeat = aFeat.get_shape()
         # aFeat0 = tf.slice(aFeat, [0, 0, 0, 0], [shapeAFeat[0], shapeAFeat[1], shapeAFeat[2], 1])
@@ -59,7 +76,7 @@ def buildNetwork(exemplar, instance, isTraining):
         print("Building adjust...")
         weights = tf.get_variable('weights', [1, 1, 1, 1], initializer=tf.constant_initializer(value=0.001, dtype=tf.float32))
         biases = tf.get_variable('biases', [1, ], initializer=tf.constant_initializer(value=0, dtype=tf.float32))
-        score = tf.nn.conv2d(score, weights, strides=[1, 1, 1, 1])
+        score = tf.nn.conv2d(score, weights, strides=[1, 1, 1, 1], padding='VALID')
         score = tf.add(score, biases)
 
     return score

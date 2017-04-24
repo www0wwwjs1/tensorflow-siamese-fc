@@ -11,7 +11,6 @@ def getOpts():
     print("config opts...")
 
     opts['validation'] = 0.1
-    opts['numScale'] = 3
     opts['exemplarSize'] = 127
     opts['instanceSize'] = 255-2*8
     opts['lossRPos'] = 16
@@ -22,7 +21,6 @@ def getOpts():
     opts['trainNumEpochs'] = 50
     opts['trainLr'] = np.logspace(-2, -5, opts['trainNumEpochs'])
     opts['trainWeightDecay'] = 5e-04
-    opts['trainBatchSize'] = 8
     opts['augTranslate'] = True
     opts['augMaxTranslate'] = 4
     opts['augStretch'] = True
@@ -67,7 +65,7 @@ def main(_):
 
     # random seed should be fixed here
     exemplar = tf.placeholder(tf.float32, [1, opts['exemplarSize'], opts['exemplarSize'], 3])
-    instance = tf.placeholder(tf.float32, [opts['numScale'], opts['exemplarSize'], opts['exemplarSize'], 3])
+    instance = tf.placeholder(tf.float32, [3, opts['exemplarSize'], opts['exemplarSize'], 3])
 
     isTraining = tf.convert_to_tensor(True, dtype='bool', name='is_training')
     score = sn.buildNetwork(exemplar, instance, isTraining)
