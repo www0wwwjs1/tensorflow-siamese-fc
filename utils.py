@@ -162,17 +162,17 @@ def vidSetupData(curation_path, root, crops_train):
     return imdb
 
 def saveImdbToPkl(imdb, curation_path, crops_train):
-    with open(curation_path+"imdb.pkl", 'w') as imdbFile:
+    with open(curation_path+"imdb.pkl", 'wb') as imdbFile:
         pickle.dump(imdb, imdbFile)
         imdbFile.close()
 
     for i in range(0, imdb.id.shape[0]):
-        with open(crops_train+imdb.path[i]+"/object.pkl", 'w') as objFile:
+        with open(crops_train+imdb.path[i]+"/object.pkl", 'wb') as objFile:
             pickle.dump(imdb.objects[i], objFile)
             objFile.close()
 
         for j in range(0, len(imdb.valid_per_trackid[i])):
-            with open(crops_train+imdb.path[i]+"/trackid_%d" % j+".pkl", 'w') as idFile:
+            with open(crops_train+imdb.path[i]+"/trackid_%d" % j+".pkl", 'wb') as idFile:
                 pickle.dump(imdb.valid_per_trackid[i][j], idFile)
                 idFile.close()
 
@@ -183,13 +183,13 @@ def saveImdbToPkl(imdb, curation_path, crops_train):
 def loadImdbFromPkl(curation_path, crops_train):
     imdb = Imdb()
     with open(curation_path+"imdb.pkl", 'rb') as imdbFile:
-        imdb = pickle.load(imdbFile, encoding='iso-8859-1')
+        imdb = pickle.load(imdbFile)
 
     imdb.objects = []
     for i in range(0, imdb.id.shape[0]):
         imdbObject = ImdbObjects()
         with open(crops_train+imdb.path[i]+"/object.pkl", 'rb') as objFile:
-            imdbObject = pickle.load(objFile, encoding='iso-8859-1')
+            imdbObject = pickle.load(objFile)
             imdb.objects.append(imdbObject)
 
         trackIdNum = np.where(imdb.valid_trackids[:, i] == 0)[0][0]
@@ -197,7 +197,7 @@ def loadImdbFromPkl(curation_path, crops_train):
 
         for j in range(0, trackIdNum):
             with open(crops_train+imdb.path[i]+"/trackid_%d" % j+".pkl", 'rb') as idFile:
-                validPerTrackid = pickle.load(idFile, encoding='iso-8859-1')
+                validPerTrackid = pickle.load(idFile)
                 validPerTrackids.append(validPerTrackid)
                 idFile.close()
 
@@ -212,7 +212,7 @@ def loadImageStatsFromMat(path):
     imgStats['x'] = {}
     imgStats['x']['averageImage'] = imgStatsMat['averageImage']
     imgStats['x']['rgbm1'] = imgStatsMat['rgbm1']
-    imgStats['x']['rgbMean'] = imgStatsMat['rgbMear']
+    imgStats['x']['rgbMean'] = imgStatsMat['rgbMean']
     imgStats['x']['rgbCovariance'] = imgStatsMat['rgbCovariance']
 
     imgStatsMat = sio.loadmat(path + "z.mat")
@@ -220,18 +220,18 @@ def loadImageStatsFromMat(path):
     imgStats['z']['averageImage'] = imgStatsMat['averageImage']
     imgStats['z']['rgbm1'] = imgStatsMat['rgbm1']
     imgStats['z']['rgbm2'] = imgStatsMat['rgbm2']
-    imgStats['z']['rgbMean'] = imgStatsMat['rgbMear']
+    imgStats['z']['rgbMean'] = imgStatsMat['rgbMean']
     imgStats['z']['rgbCovariance'] = imgStatsMat['rgbCovariance']
 
     with open(path + "imageStats.pkl", 'wb') as imgStatsFile:
-        pickle.dump(imgStats, imgStatsFile, encoding='iso-8859-1')
+        pickle.dump(imgStats, imgStatsFile)
         imgStatsFile.close()
 
     return imgStatsMat
 
 def loadImageStats(path):
     with open(path+"imageStats.pkl", 'rb') as imgStatsFile:
-        imgStats = pickle.load(imgStatsFile, encoding='iso-8859-1')
+        imgStats = pickle.load(imgStatsFile)
 
     return imgStats
 
