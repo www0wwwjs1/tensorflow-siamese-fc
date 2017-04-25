@@ -1,11 +1,12 @@
 # Suofei ZHANG, 2017.
 
 import tensorflow as tf
+from parameters import configParams
 from tensorflow.python.ops import control_flow_ops
-from tensorflow.python.training import moving_averages
+# from tensorflow.python.training import moving_averages
 
-MOVING_AVERAGE_DECAY = 0        #only siamese-net in matlab uses 0 here, other projects with tensorflow all use 0.999 here, from some more documents, I think 0.999 is more probable here, since tensorflow uses a equation as 1-decay for this parameter
-UPDATE_OPS_COLLECTION = 'resnet_update_ops'
+# MOVING_AVERAGE_DECAY = 0        #only siamese-net in matlab uses 0 here, other projects with tensorflow all use 0.999 here, from some more documents, I think 0.999 is more probable here, since tensorflow uses a equation as 1-decay for this parameter
+# UPDATE_OPS_COLLECTION = 'resnet_update_ops'
 
 # def inference(_instance):
 #     # input of network z
@@ -19,6 +20,8 @@ UPDATE_OPS_COLLECTION = 'resnet_update_ops'
 #     return
 
 def buildNetwork(exemplar, instance, isTraining):
+    params = configParams()
+
     with tf.variable_scope('siamese') as scope:
         aFeat = buildBranch(exemplar, isTraining)
         scope.reuse_variables()
@@ -26,40 +29,40 @@ def buildNetwork(exemplar, instance, isTraining):
 
         # the conv2d op in tf is used to implement xcorr directly, from theory, the implementation of conv2d is correlation. However, it is necessary to transpose the weights tensor to a input tensor
         # different scales are tackled with slicing the data. Now only 3 scales are considered, but in training, more samples in a batch is also tackled by the same mechanism. Hence more slices is to be implemented here!!
-    with tf.variable_scope('scorr'):
+    with tf.variable_scope('score'):
         print("Building xcorr...")
-        groupConv = lambda i, k: tf.nn.conv2d(i, k, strides=[1, 1, 1, 1], padding='VALID')
         aFeat = tf.transpose(aFeat, perm=[1, 2, 3, 0])
-        shapeAFeat = aFeat.get_shape()
-        if int(shapeAFeat[-1]) > 1:
-            aFeats = tf.split(axis=3, num_or_size_splits=shapeAFeat[-1], value=aFeat)
+        batchAFeat = int(aFeat.get_shape()[-1])
+        batchScore = int(score.get_shape()[0])
 
-        scores = tf.split(axis=3, num_or_size_splits=score.get_shape()[-1], value=score)
-        scores = [groupConv(i, k) for i, k in zip(scores, aFeats)]
+        if batchAFeat > 1:
+            groupConv = lambda i, k: tf.nn.conv2d(i, k, strides=[1, 1, 1, 1], padding='VALID')
 
-        score = tf.concat(axis=3, values=scores)
+            assert batchAFeat == params['trainBatchSize']
+            assert batchScore == params['trainBatchSize']
 
-        # shapeAFeat = aFeat.get_shape()
-        # aFeat0 = tf.slice(aFeat, [0, 0, 0, 0], [shapeAFeat[0], shapeAFeat[1], shapeAFeat[2], 1])
-        # aFeat1 = tf.slice(aFeat, [0, 0, 0, 1], [shapeAFeat[0], shapeAFeat[1], shapeAFeat[2], 1])
-        # aFeat2 = tf.slice(aFeat, [0, 0, 0, 2], [shapeAFeat[0], shapeAFeat[1], shapeAFeat[2], 1])
-        #
-        # shapeScore = score.get_shape()
-        # score0 = tf.slice(score, [0, 0, 0, 0], [1, shapeScore[1], shapeScore[2], shapeScore[3]])
-        # score1 = tf.slice(score, [1, 0, 0, 0], [1, shapeScore[1], shapeScore[2], shapeScore[3]])
-        # score2 = tf.slice(score, [2, 0, 0, 0], [1, shapeScore[1], shapeScore[2], shapeScore[3]])
-        #
-        # score0 = tf.nn.conv2d(score0, aFeat0, strides=[1, 1, 1, 1])
-        # score1 = tf.nn.conv2d(score1, aFeat0, strides=[1, 1, 1, 1])
-        # score2 = tf.nn.conv2d(score2, aFeat0, strides=[1, 1, 1, 1])
-        #
-        # score = tf.concat([score0, score1, score2], 0)
+            aFeats = tf.split(axis=3, num_or_size_splits=batchAFeat, value=aFeat)
+            scores = tf.split(axis=0, num_or_size_splits=batchScore, value=score)
+            scores = [groupConv(i, k) for i, k in zip(scores, aFeats)]
+
+            score = tf.concat(axis=3, values=scores)
+            score = tf.transpose(score, perm=[3, 1, 2, 0])
+        else:
+            assert batchAFeat == 1
+            assert batchScore == params['numScale']
+
+            scores = tf.split(axis=0, num_or_size_splits=batchScore, value=score)
+            for i in range(batchScore):
+                scores1 = []
+                scores1.append(tf.nn.conv2d(scores[i], aFeat, strides=[1, 1, 1, 1], padding='VALID'))
+
+            score = tf.concat(axis=0, values=scores1)
 
     with tf.variable_scope('adjust'):
         print("Building adjust...")
         weights = tf.get_variable('weights', [1, 1, 1, 1], initializer=tf.constant_initializer(value=0.001, dtype=tf.float32))
         biases = tf.get_variable('biases', [1, ], initializer=tf.constant_initializer(value=0, dtype=tf.float32))
-        score = tf.nn.conv2d(score, weights, strides=[1, 1, 1, 1])
+        score = tf.nn.conv2d(score, weights, strides=[1, 1, 1, 1], padding='VALID')
         score = tf.add(score, biases)
 
     return score
@@ -160,28 +163,6 @@ def conv2(inputs, channels, filters, size, stride):
 
 def batchNormalization(inputs, isTraining):
     return tf.contrib.layers.batch_norm(inputs, center=True, scale=True, is_training=isTraining)
-# def batchNormalization(inputs, isTraining):
-#     xShape = inputs.get_shape()
-#     paramsShape = xShape[-1:]
-#     axis = list(range(len(xShape)-1))
-#
-#     beta = tf.get_variable('beta', paramsShape, initializer=tf.constant_initializer(value=0, dtype=tf.float32))
-#     gamma = tf.get_variable('gamma', paramsShape, initializer=tf.constant_initializer(value=1, dtype=tf.float32))
-#     movingMean = tf.get_variable('moving_mean', paramsShape, initializer=tf.constant_initializer(value=0, dtype=tf.float32), trainable=False)
-#     movingVariance = tf.get_variable('moving_variance', paramsShape, initializer=tf.constant_initializer(value=1, dtype=tf.float32), trainable=False)
-#
-#     mean, variance = tf.nn.moments(inputs, axis)
-#     updateMovingMean = moving_averages.assign_moving_average(movingMean, mean, MOVING_AVERAGE_DECAY)
-#     updateMovingVariance = moving_averages.assign_moving_average(movingVariance, variance, MOVING_AVERAGE_DECAY)
-#     tf.add_to_collection(UPDATE_OPS_COLLECTION, updateMovingMean)
-#     tf.add_to_collection(UPDATE_OPS_COLLECTION, updateMovingVariance)
-#
-#     mean, variance = control_flow_ops.cond(isTraining, lambda: (mean, variance), lambda: (movingMean, movingVariance))
-#
-#     bn = tf.nn.batch_normalization(inputs, mean, variance, beta, gamma, 0.0001)
-#     print('Layer type = batch_norm')
-#
-#     return bn
 
 def maxPool(inputs, kSize, _stride):
     return tf.nn.max_pool(inputs, ksize=[1, kSize, kSize, 1], strides=[1, _stride, _stride, 1], padding='VALID')
@@ -189,4 +170,68 @@ def maxPool(inputs, kSize, _stride):
 
 
 
+    # def batchNormalization(inputs, isTraining):
+    #     xShape = inputs.get_shape()
+    #     paramsShape = xShape[-1:]
+    #     axis = list(range(len(xShape)-1))
+    #
+    #     beta = tf.get_variable('beta', paramsShape, initializer=tf.constant_initializer(value=0, dtype=tf.float32))
+    #     gamma = tf.get_variable('gamma', paramsShape, initializer=tf.constant_initializer(value=1, dtype=tf.float32))
+    #     movingMean = tf.get_variable('moving_mean', paramsShape, initializer=tf.constant_initializer(value=0, dtype=tf.float32), trainable=False)
+    #     movingVariance = tf.get_variable('moving_variance', paramsShape, initializer=tf.constant_initializer(value=1, dtype=tf.float32), trainable=False)
+    #
+    #     mean, variance = tf.nn.moments(inputs, axis)
+    #     updateMovingMean = moving_averages.assign_moving_average(movingMean, mean, MOVING_AVERAGE_DECAY)
+    #     updateMovingVariance = moving_averages.assign_moving_average(movingVariance, variance, MOVING_AVERAGE_DECAY)
+    #     tf.add_to_collection(UPDATE_OPS_COLLECTION, updateMovingMean)
+    #     tf.add_to_collection(UPDATE_OPS_COLLECTION, updateMovingVariance)
+    #
+    #     mean, variance = control_flow_ops.cond(isTraining, lambda: (mean, variance), lambda: (movingMean, movingVariance))
+    #
+    #     bn = tf.nn.batch_normalization(inputs, mean, variance, beta, gamma, 0.0001)
+    #     print('Layer type = batch_norm')
+    #
+    #     return bn
 
+
+    # groupConv = lambda i, k: tf.nn.conv2d(i, k, strides=[1, 1, 1, 1], padding='VALID')
+    #
+    # batchAFeat = int(aFeat.get_shape()[-1])
+    # batchScore = int(score.get_shape()[0])
+    # if batchAFeat > 1:
+    #     assert batchAFeat == params['trainBatchSize']
+    #     assert batchScore == params['trainBatchSize']
+    #
+    #     aFeats = tf.split(axis=3, num_or_size_splits=batchAFeat, value=aFeat)
+    #     scores = tf.split(axis=0, num_or_size_splits=batchScore, value=score)
+    #     scores = [groupConv(i, k) for i, k in zip(scores, aFeats)]
+    #
+    #     score = tf.concat(axis=3, values=scores)
+    #     score = tf.transpose(score, perm=[3, 1, 2, 0])
+    # else:
+    #     assert batchAFeat == 1
+    #     assert batchScore == params['numScale']
+    #
+    #     scores = tf.split(axis=0, num_or_size_splits=batchScore, value=score)
+    #     for i in range(batchScore):
+    #         scores1 = []
+    #         scores1.append(tf.nn.conv2d(scores[i], aFeat, strides=[1, 1, 1, 1], padding='VALID'))
+    #
+    #     score = tf.concat(axis=0, values=scores1)
+
+
+    # shapeAFeat = aFeat.get_shape()
+    # aFeat0 = tf.slice(aFeat, [0, 0, 0, 0], [shapeAFeat[0], shapeAFeat[1], shapeAFeat[2], 1])
+    # aFeat1 = tf.slice(aFeat, [0, 0, 0, 1], [shapeAFeat[0], shapeAFeat[1], shapeAFeat[2], 1])
+    # aFeat2 = tf.slice(aFeat, [0, 0, 0, 2], [shapeAFeat[0], shapeAFeat[1], shapeAFeat[2], 1])
+    #
+    # shapeScore = score.get_shape()
+    # score0 = tf.slice(score, [0, 0, 0, 0], [1, shapeScore[1], shapeScore[2], shapeScore[3]])
+    # score1 = tf.slice(score, [1, 0, 0, 0], [1, shapeScore[1], shapeScore[2], shapeScore[3]])
+    # score2 = tf.slice(score, [2, 0, 0, 0], [1, shapeScore[1], shapeScore[2], shapeScore[3]])
+    #
+    # score0 = tf.nn.conv2d(score0, aFeat0, strides=[1, 1, 1, 1])
+    # score1 = tf.nn.conv2d(score1, aFeat0, strides=[1, 1, 1, 1])
+    # score2 = tf.nn.conv2d(score2, aFeat0, strides=[1, 1, 1, 1])
+    #
+    # score = tf.concat([score0, score1, score2], 0)

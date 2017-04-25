@@ -96,7 +96,7 @@ def vidSetupData(curation_path, root, crops_train):
     nVideos = videoIds.shape[0]
     imdb = Imdb(nVideos, MAX_TRACKIDS, videoIds, videoNFrames, videoPaths)
 
-    for i in range(0, nVideos):      #nVideos
+    for i in range(0, 10):      #nVideos
         print("Objects from video %d" % i + "/%d" % nVideos)
 
         with open(rootPath+imdb.path[i]+".txt", 'r') as vidFile:

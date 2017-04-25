@@ -2,6 +2,7 @@
 
 import numpy as np
 import tensorflow as tf
+import random
 import siamese_net as sn
 from parameters import configParams
 import utils
@@ -11,7 +12,6 @@ def getOpts():
     print("config opts...")
 
     opts['validation'] = 0.1
-    opts['numScale'] = 3
     opts['exemplarSize'] = 127
     opts['instanceSize'] = 255-2*8
     opts['lossRPos'] = 16
@@ -22,13 +22,13 @@ def getOpts():
     opts['trainNumEpochs'] = 50
     opts['trainLr'] = np.logspace(-2, -5, opts['trainNumEpochs'])
     opts['trainWeightDecay'] = 5e-04
-    opts['trainBatchSize'] = 8
     opts['augTranslate'] = True
     opts['augMaxTranslate'] = 4
     opts['augStretch'] = True
     opts['augMaxStretch'] = 0.05
     opts['augColor'] = True
     opts['augGrayscale'] = 0
+    opts['randomSeed'] = 0
 
     return opts
 
@@ -62,21 +62,29 @@ def main(_):
     opts = getOpts()
     # curation.py should be executed once before
     imdb = utils.loadImdbFromPkl(params['curation_path'], params['crops_train'])
-
     rgbMeanZ, rgbVarZ, rgbMeanX, rgbVarX = loadStats(params['curation_path'])
 
     # random seed should be fixed here
-    exemplar = tf.placeholder(tf.float32, [1, opts['exemplarSize'], opts['exemplarSize'], 3])
-    instance = tf.placeholder(tf.float32, [opts['numScale'], opts['exemplarSize'], opts['exemplarSize'], 3])
+    random.seed(opts['randomSeed'])
+    exemplar = tf.placeholder(tf.float32, [params['trainBatchSize'], opts['exemplarSize'], opts['exemplarSize'], 3])
+    instance = tf.placeholder(tf.float32, [params['trainBatchSize'], opts['instanceSize'], opts['instanceSize'], 3])
+
 
     isTraining = tf.convert_to_tensor(True, dtype='bool', name='is_training')
     score = sn.buildNetwork(exemplar, instance, isTraining)
 
+    scoreSize = int(score.get_shape()[1])
+    y = tf.placeholder(tf.float32, [params['trainBatchSize'], scoreSize, scoreSize, 1])
+
+
+
     sess = tf.Session()
-    sess.run(tf.initialize_all_variables())
+    sess.run(tf.global_variables_initializer())
     print(sess.run(score))
 
     return
+
+
 
 
 if __name__ == '__main__':
