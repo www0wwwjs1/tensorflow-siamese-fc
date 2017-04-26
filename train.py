@@ -57,24 +57,48 @@ def loadStats(path):
         rgbVarX = 0.1*np.dot(np.sqrt(d), v.T)
         return rgbMeanZ, rgbVarZ, rgbMeanX, rgbVarX
 
+def chooseValSet(imdb, opts):
+    TRAIN_SET = 1
+    VAL_SET = 2
+
+    sizeDataset = len(imdb.id)
+    sizeVal = round(opts['validation']*sizeDataset)
+    sizeTrain = sizeDataset-sizeVal
+    imdb.set = np.zeros([sizeDataset], dtype='uint8')
+    imdb.set[:sizeTrain] = TRAIN_SET
+    imdb.set[sizeTrain:] = VAL_SET
+
+    imdbInd = {}
+    imdbInd['id'] = range(0, opts['numPairs'])
+    imdbInd['imageSet'] = np.zeros([opts['numPairs']], dtype='uint8')
+    nPairsTrain = round(opts['numPairs']*(1-opts['validation']))
+    imdbInd['imageSet'][:nPairsTrain] = TRAIN_SET
+    imdbInd['imageSet'][nPairsTrain:] = VAL_SET
+
+    return imdb, imdbInd
+
+
 def main(_):
     params = configParams()
     opts = getOpts()
     # curation.py should be executed once before
     imdb = utils.loadImdbFromPkl(params['curation_path'], params['crops_train'])
     rgbMeanZ, rgbVarZ, rgbMeanX, rgbVarX = loadStats(params['curation_path'])
+    imdb, imdbInd = chooseValSet(imdb, opts)
 
     # random seed should be fixed here
     random.seed(opts['randomSeed'])
     exemplar = tf.placeholder(tf.float32, [params['trainBatchSize'], opts['exemplarSize'], opts['exemplarSize'], 3])
     instance = tf.placeholder(tf.float32, [params['trainBatchSize'], opts['instanceSize'], opts['instanceSize'], 3])
 
-
     isTraining = tf.convert_to_tensor(True, dtype='bool', name='is_training')
     score = sn.buildNetwork(exemplar, instance, isTraining)
 
-    scoreSize = int(score.get_shape()[1])
-    y = tf.placeholder(tf.float32, [params['trainBatchSize'], scoreSize, scoreSize, 1])
+    restSz = int(score.get_shape()[1])
+    restSz = [restSz, restSz]
+    respStride = 8  # calculated from stride of convolutional layers and pooling layers
+    y = tf.placeholder(tf.float32, [params['trainBatchSize'], restSz[0], restSz[0], 1])
+
 
 
 
