@@ -2,22 +2,11 @@
 
 import tensorflow as tf
 from parameters import configParams
-from tensorflow.python.ops import control_flow_ops
+# from tensorflow.python.ops import control_flow_ops
 # from tensorflow.python.training import moving_averages
 
 # MOVING_AVERAGE_DECAY = 0        #only siamese-net in matlab uses 0 here, other projects with tensorflow all use 0.999 here, from some more documents, I think 0.999 is more probable here, since tensorflow uses a equation as 1-decay for this parameter
 # UPDATE_OPS_COLLECTION = 'resnet_update_ops'
-
-# def inference(_instance):
-#     # input of network z
-#     exemplar = tf.placeholder('float32', [None, 127, 127, 3])
-#     # input of network x
-#     a_feat = tf.placeholder('float32', [None, 6, 6, 256])
-#     instance = tf.placeholder('float32', [None, 255, 255, 3])
-#     # self.score = tf.placeholder('float32', [None, 17, 17, 1])
-#
-# def train(params):
-#     return
 
 def buildNetwork(exemplar, instance, isTraining):
     params = configParams()
@@ -167,6 +156,16 @@ def batchNormalization(inputs, isTraining):
 def maxPool(inputs, kSize, _stride):
     return tf.nn.max_pool(inputs, ksize=[1, kSize, kSize, 1], strides=[1, _stride, _stride, 1], padding='VALID')
 
+# the code here is strictly analogous to the matlab version of siamese-fc, weighted logistic loss function
+# however, weighted cross entropy loss can also be used with tf implementation
+def loss(score, y, weights):
+    a = -tf.multiply(score, y)
+    b = tf.nn.relu(a)
+    loss = b+tf.log(tf.exp(-b)+tf.exp(a-b))
+    loss = tf.multiply(weights, loss)
+    return loss
+
+
 
 
 
@@ -235,3 +234,14 @@ def maxPool(inputs, kSize, _stride):
     # score2 = tf.nn.conv2d(score2, aFeat0, strides=[1, 1, 1, 1])
     #
     # score = tf.concat([score0, score1, score2], 0)
+
+# def inference(_instance):
+#     # input of network z
+#     exemplar = tf.placeholder('float32', [None, 127, 127, 3])
+#     # input of network x
+#     a_feat = tf.placeholder('float32', [None, 6, 6, 256])
+#     instance = tf.placeholder('float32', [None, 255, 255, 3])
+#     # self.score = tf.placeholder('float32', [None, 17, 17, 1])
+#
+# def train(params):
+#     return
