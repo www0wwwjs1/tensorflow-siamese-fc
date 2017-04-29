@@ -3,7 +3,7 @@
 import numpy as np
 from numpy.matlib import repmat
 import tensorflow as tf
-import random
+import matplotlib.image as mpimg
 import siamese_net as sn
 from parameters import configParams
 import utils
@@ -23,13 +23,7 @@ def getOpts():
     opts['trainNumEpochs'] = 50
     opts['trainLr'] = np.logspace(-2, -5, opts['trainNumEpochs'])
     opts['trainWeightDecay'] = 5e-04
-    opts['augTranslate'] = True
-    opts['augMaxTranslate'] = 4
-    opts['augStretch'] = True
-    opts['augMaxStretch'] = 0.05
-    opts['augColor'] = True
-    opts['augGrayscale'] = 0
-    opts['randomSeed'] = 0
+    opts['randomSeed'] = 1
 
     return opts
 
@@ -132,14 +126,14 @@ def centerThrErr(score, labels, oldRes, m):
     radiusInpix = 50
     totalStride = 8
     nStep = 100
-    batchSize = np.shape(score)[0]
+    batchSize = score.shape[0]
     posMask = np.where(labels > 0)
-    numPos = np.shape(posMask)[-1]
+    numPos = posMask.shape[-1]
 
     res = 0
 
     responses = np.squeeze(score[posMask, :, :, :], axis=(0,))
-    half = np.floor(np.shape(score)[1]/2)
+    half = np.floor(score.shape[1]/2)
     centerLabel = repmat([half, half], numPos, 1)
     positions = np.zeros([numPos, 2], dtype=np.float32)
 
@@ -151,11 +145,10 @@ def centerThrErr(score, labels, oldRes, m):
     res = precisionAuc(positions, centerLabel, radiusInpix/totalStride, nStep)
 
     res = (oldRes*m+res)/(m+batchSize)
-    m = m+batchSize
-    return res, m
+    return res
 
 def centerScore(x):
-    m1, m2 = np.shape(x)
+    m1, m2 = x.shape
     c1 = (m1+1)/2-1
     c2 = (m2+1)/2-1
     v = x[int(c1), int(c2)]
@@ -163,7 +156,7 @@ def centerScore(x):
     return v
 
 def maxScoreErr(x, yGt, oldRes, m):
-    b, m1, m2, k = np.shape(x)
+    b, m1, m2, k = x.shape
 
     errs = np.zeros([b], dtype=np.float32)
 
@@ -178,9 +171,144 @@ def maxScoreErr(x, yGt, oldRes, m):
     res = len(np.where(errs <= 0)[0])
 
     res = (oldRes*m+res)/(m+b)
-    m = m+b
 
-    return res, m
+    return res
+
+def choosePosPair(imdb, idx, frameRange):
+    validTrackIds = np.where(imdb.valid_trackids[:, idx] > 1)[0]
+    randTrackidZ = np.random.permutation(validTrackIds)[0]
+
+    frames = imdb.valid_per_trackid[idx][randTrackidZ]
+    randZ = np.random.permutation(frames)[0]
+    randZPos = frames.index(randZ)
+
+    possibleX = frames
+    possibleX = possibleX[:min(len(frames), randZPos+frameRange)]
+    possibleX = possibleX[max(randZPos-frameRange, 0):]
+    possibleX.remove(randZ)
+
+    randX = np.random.permutation(possibleX)[0]
+
+    z = imdb.objects[idx]
+    x = imdb.objects[idx]
+
+    return z, randZ, x, randX
+
+def acquireAugment(im, imageSize, rgbVar, augOpts):
+    if not isinstance(imageSize, list): #len(imageSize) == 1:
+        imageSize = [imageSize, imageSize]
+
+    if not isinstance(augOpts['maxTranslate'], list): #len(augOpts['maxTranslate']) == 1:
+        augOpts['maxTranslate'] = [augOpts['maxTranslate'], augOpts['maxTranslate']]
+
+    if im.shape[-1] == 1:
+        imt = np.zeros([im.shape[0], im.shape[0], 3])
+        imt[:, :, 0] = imt[:, :, 1] = imt[:, :, 2] = im
+    else:
+        imt = im
+
+    h, w, _ = imt.shape
+    cx = (w+1)/2-1
+    cy = (h+1)/2-1
+
+    if augOpts['stretch']:
+        scale = np.squeeze((1+augOpts['maxStretch']*(-1+2*np.random.rand(2, 1))))
+        test = np.multiply(imageSize, scale)
+        sz = np.around(np.min([test, [h, w]], 1))
+    else:
+        sz = imageSize
+
+    if augOpts['translate']:
+        if not isinstance(augOpts['maxTranslate'], list):
+            dx = np.random.randint(1, w-sz[1]+1, 1)
+            dy = np.random.randint(1, h-sz(0)+1, 1)
+        else:
+            mx = min(augOpts['maxTranslate'][1], np.floor((w-sz[1])/2))
+            my = min(augOpts['maxTranslate'][0], np.floor((h-sz[0])/2))
+            dx = cx-(sz[1]-1)/2+np.random.randint(-mx, mx+1, 1)
+            dy = cy-(sz[0]-1)/2+np.random.randint(-my, my+1, 1)
+    else:
+        dx = cx-(sz[1]-1)/2
+        dy = cy-(sz[0]-1)/2
+
+    sx = np.around(np.linspace(dx, dx+sz[1]-1, imageSize[1]))
+    sy = np.around(np.linspace(dy, dy+sz[0]-1, imageSize[0]))
+    sx = sx.astype(int).tolist()
+    sy = sy.astype(int).tolist()
+
+    imo = imt[sy, :, :]
+    imo = imo[:, sy, :]
+    if augOpts['color']:
+        offset = np.dot(rgbVar, np.random.randn(3, 1))
+        imo[:, :, 0] = imo[:, :, 0]-offset[0]
+        imo[:, :, 1] = imo[:, :, 1]-offset[1]
+        imo[:, :, 2] = imo[:, :, 2]-offset[2]
+
+    return imo
+
+def vidGetRandBatch(imdbInd, imdb, batch, params, opts):
+    TRAIN_SET = 1
+    VAL_SET = 2
+
+    batchSet = imdbInd['imageSet'][batch[0]]
+    assert all(batchSet == imdbInd['imageSet'][batch])
+    batchSize = len(batch)
+    pairTypesRgb = 1
+    dataDir = params['crops_train']
+
+    idsSet = np.where(imdb.set == batchSet)[0]
+    rndVideos = np.random.permutation(idsSet)[:batchSize]
+    idsPairs = rndVideos
+
+    imoutZ = np.zeros([batchSize, opts['exemplarSize'], opts['exemplarSize'], 3], dtype=np.float32)
+    imoutX = np.zeros([batchSize, opts['instanceSize'], opts['instanceSize'], 3], dtype=np.float32)
+
+    objectsZ = []
+    objectsX = []
+    idxZ = []
+    idxX = []
+    cropsZStr = []
+    cropsXStr = []
+    for i in range(0, batchSize):
+        z, randZ, x, randX = choosePosPair(imdb, idsPairs[i], opts['frameRange'])
+        objectsZ.append(z)
+        idxZ.append(randZ)
+        objectsX.append(x)
+        idxX.append(randX)
+
+        zStr = dataDir+z.frame_path[randZ]
+        zStr = zStr.replace(".JPEG", "")+".%02d.crop.z.jpg" % z.track_id[randZ]
+        xStr = dataDir+x.frame_path[randX]
+        xStr = xStr.replace(".JPEG", "")+".%02d.crop.x.jpg" % x.track_id[randX]
+        cropsZStr.append(zStr)
+        cropsXStr.append(xStr)
+
+    augOpts = {}
+    if batchSet == TRAIN_SET:
+        augOpts['translate'] = True
+        augOpts['maxTranslate'] = 4
+        augOpts['stretch'] = True
+        augOpts['maxStretch'] = 0.05
+        augOpts['color'] = True
+        augOpts['grayscale'] = 0
+    else:
+        augOpts['translate'] = False
+        augOpts['maxTranslate'] = 0
+        augOpts['stretch'] = False
+        augOpts['maxStretch'] = 0
+        augOpts['color'] = False
+
+    for i in range(batchSize):
+        imz = mpimg.imread(cropsZStr[i])
+        imx = mpimg.imread(cropsXStr[i])
+
+        augZ = acquireAugment(imz, opts['exemplarSize'], opts['rgbVarZ'], augOpts)
+        augX = acquireAugment(imx, opts['instanceSize'], opts['rgbVarX'], augOpts)
+
+        imoutZ[:, :, :, i] = augZ
+        imoutX[:, :, :, i] = augX
+
+    return imoutZ, imoutX
 
 def main(_):
     params = configParams()
@@ -191,45 +319,46 @@ def main(_):
     imdb, imdbInd = chooseValSet(imdb, opts)
 
     # random seed should be fixed here
-    random.seed(opts['randomSeed'])
-    exemplar = tf.placeholder(tf.float32, [params['trainBatchSize'], opts['exemplarSize'], opts['exemplarSize'], 3])
-    instance = tf.placeholder(tf.float32, [params['trainBatchSize'], opts['instanceSize'], opts['instanceSize'], 3])
+    np.random.seed(opts['randomSeed'])
+    exemplarOp = tf.placeholder(tf.float32, [params['trainBatchSize'], opts['exemplarSize'], opts['exemplarSize'], 3])
+    instanceOp = tf.placeholder(tf.float32, [params['trainBatchSize'], opts['instanceSize'], opts['instanceSize'], 3])
     # labels = tf.placeholder(tf.float32, [params['trainBatchSize']])
 
-    isTraining = tf.convert_to_tensor(True, dtype='bool', name='is_training')
-    score = sn.buildNetwork(exemplar, instance, isTraining)
+    isTrainingOp = tf.convert_to_tensor(True, dtype='bool', name='is_training')
+    scoreOp = sn.buildNetwork(exemplarOp, instanceOp, isTrainingOp)
 
-    respSz = int(score.get_shape()[1])
+    respSz = int(scoreOp.get_shape()[1])
     respSz = [respSz, respSz]
     respStride = 8  # calculated from stride of convolutional layers and pooling layers
     fixedLabel, instanceWeight = createLabels(respSz, opts['lossRPos']/respStride, opts['lossRNeg']/respStride)
-    instanceWeight = tf.constant(instanceWeight, dtype=tf.float32)
+    instanceWeightOp = tf.constant(instanceWeight, dtype=tf.float32)
 
-    y = tf.placeholder(tf.float32, [params['trainBatchSize'], respSz[0], respSz[0], 1])
+    yOp = tf.placeholder(tf.float32, [params['trainBatchSize'], respSz[0], respSz[0], 1])
 
-    loss = tf.reduce_mean(sn.loss(score, y, instanceWeight))
-
-
-
-
-
-    score = np.zeros([8, 15, 15, 1], dtype=np.float32)
+    lossOp = tf.reduce_mean(sn.loss(scoreOp, yOp, instanceWeightOp))
     labels = np.ones([8], dtype=np.float32)
-    for b in range(0, 8):
-        for i in range(0, 15):
-            for j in range(0, 15):
-                score[b, i, j, 0] = np.random.randn()
 
     # sess = tf.Session()
     # sess.run(tf.global_variables_initializer())
     # print(sess.run(score))
-    errDispNum = 0
+
+    trainSamples = opts['numPairs']*(1-opts['validation'])
+    sampleNum = 0
     errDisp = 0
-    errMaxNum = 0
     errMax = 0
 
-    errDisp = centerThrErr(score, labels, errDisp, errDispNum)
-    errMax = maxScoreErr(score, labels, errMax, errMaxNum)
+    sampleIdx = np.random.permutation(int(trainSamples))
+    batch = sampleIdx[sampleNum:sampleNum+params['trainBatchSize']]
+
+    opts['rgbMeanZ'] = rgbMeanZ
+    opts['rgbVarZ'] = rgbVarZ
+    opts['rgbMeanX'] = rgbMeanX
+    opts['rgbVarX'] = rgbVarX
+    imoutZ, imoutX = vidGetRandBatch(imdbInd, imdb, batch, params, opts)
+
+    errDisp = centerThrErr(score, labels, errDisp, sampleNum)
+    errMax = maxScoreErr(score, labels, errMax, sampleNum)
+    sampleNum = sampleNum+params['trainBatchSize']
 
 
     return
@@ -240,3 +369,12 @@ def main(_):
 if __name__ == '__main__':
     tf.app.run()
 
+
+
+    #     score = np.zeros([8, 15, 15, 1], dtype=np.float32)
+
+    # labels = np.ones([8], dtype=np.float32)
+    # for b in range(0, 8):
+    #     for i in range(0, 15):
+    #         for j in range(0, 15):
+    #             score[b, i, j, 0] = np.random.randn()
