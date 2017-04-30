@@ -4,6 +4,7 @@ import numpy as np
 from numpy.matlib import repmat
 import tensorflow as tf
 import matplotlib.image as mpimg
+import os
 import siamese_net as sn
 from parameters import configParams
 import utils
@@ -25,6 +26,9 @@ def getOpts():
     opts['trainWeightDecay'] = 5e-04
     opts['randomSeed'] = 1
 
+    opts['start'] = 0
+    opts['summaryFile'] = './data/test01'
+    opts['ckptPath'] = './data/'
     return opts
 
 def getEig(mat):
@@ -91,7 +95,7 @@ def createLogLossLabel(labelSize, rPos, rNeg):
 
     return logLossLabel
 
-def createLabels(labelSize, rPos, rNeg):
+def createLabels(labelSize, rPos, rNeg, batchSize):
     half = np.floor(labelSize[0]/2)
 
     fixedLabel = createLogLossLabel(labelSize, rPos, rNeg)
@@ -105,7 +109,14 @@ def createLabels(labelSize, rPos, rNeg):
     instanceWeight[idxP[0], idxP[1]] = 0.5*instanceWeight[idxP[0], idxP[1]]/sumP
     instanceWeight[idxN[0], idxN[1]] = 0.5*instanceWeight[idxN[0], idxN[1]]/sumN
 
-    return fixedLabel, instanceWeight
+    fixedLabels = np.zeros([batchSize, labelSize[0], labelSize[1], 1], dtype=np.float32)
+    instanceWeights = np.zeros([batchSize, labelSize[0], labelSize[1], 1], dtype=np.float32)
+
+    for i in range(batchSize):
+        fixedLabels[i, :, :, 0] = fixedLabel
+        instanceWeights[i, :, :, 0] = instanceWeight
+
+    return fixedLabels, instanceWeights
 
 def precisionAuc(positions, groundTruth, radius, nStep):
     thres = np.linspace(0, radius, nStep)
@@ -214,7 +225,7 @@ def acquireAugment(im, imageSize, rgbVar, augOpts):
     if augOpts['stretch']:
         scale = np.squeeze((1+augOpts['maxStretch']*(-1+2*np.random.rand(2, 1))))
         test = np.multiply(imageSize, scale)
-        sz = np.around(np.min([test, [h, w]], 1))
+        sz = np.around(np.min([test, [h, w]], 0))
     else:
         sz = imageSize
 
@@ -305,8 +316,8 @@ def vidGetRandBatch(imdbInd, imdb, batch, params, opts):
         augZ = acquireAugment(imz, opts['exemplarSize'], opts['rgbVarZ'], augOpts)
         augX = acquireAugment(imx, opts['instanceSize'], opts['rgbVarX'], augOpts)
 
-        imoutZ[:, :, :, i] = augZ
-        imoutX[:, :, :, i] = augX
+        imoutZ[i, :, :, :] = augZ
+        imoutX[i, :, :, :] = augX
 
     return imoutZ, imoutX
 
@@ -322,43 +333,102 @@ def main(_):
     np.random.seed(opts['randomSeed'])
     exemplarOp = tf.placeholder(tf.float32, [params['trainBatchSize'], opts['exemplarSize'], opts['exemplarSize'], 3])
     instanceOp = tf.placeholder(tf.float32, [params['trainBatchSize'], opts['instanceSize'], opts['instanceSize'], 3])
-    # labels = tf.placeholder(tf.float32, [params['trainBatchSize']])
+    lr = tf.placeholder(tf.float32, shape=[])
 
     isTrainingOp = tf.convert_to_tensor(True, dtype='bool', name='is_training')
     scoreOp = sn.buildNetwork(exemplarOp, instanceOp, isTrainingOp)
 
+    labels = np.ones([8], dtype=np.float32)
     respSz = int(scoreOp.get_shape()[1])
     respSz = [respSz, respSz]
     respStride = 8  # calculated from stride of convolutional layers and pooling layers
-    fixedLabel, instanceWeight = createLabels(respSz, opts['lossRPos']/respStride, opts['lossRNeg']/respStride)
+    fixedLabel, instanceWeight = createLabels(respSz, opts['lossRPos']/respStride, opts['lossRNeg']/respStride, params['trainBatchSize'])
+
     instanceWeightOp = tf.constant(instanceWeight, dtype=tf.float32)
-
-    yOp = tf.placeholder(tf.float32, [params['trainBatchSize'], respSz[0], respSz[0], 1])
-
-    lossOp = tf.reduce_mean(sn.loss(scoreOp, yOp, instanceWeightOp))
-    labels = np.ones([8], dtype=np.float32)
-
-    # sess = tf.Session()
-    # sess.run(tf.global_variables_initializer())
-    # print(sess.run(score))
-
-    trainSamples = opts['numPairs']*(1-opts['validation'])
-    sampleNum = 0
-    errDisp = 0
-    errMax = 0
-
-    sampleIdx = np.random.permutation(int(trainSamples))
-    batch = sampleIdx[sampleNum:sampleNum+params['trainBatchSize']]
+    yOp = tf.placeholder(tf.float32, fixedLabel.shape)
+    with tf.name_scope("logistic_loss"):
+        lossOp = tf.reduce_mean(sn.loss(scoreOp, yOp, instanceWeightOp))
 
     opts['rgbMeanZ'] = rgbMeanZ
     opts['rgbVarZ'] = rgbVarZ
     opts['rgbMeanX'] = rgbMeanX
     opts['rgbVarX'] = rgbVarX
-    imoutZ, imoutX = vidGetRandBatch(imdbInd, imdb, batch, params, opts)
 
-    errDisp = centerThrErr(score, labels, errDisp, sampleNum)
-    errMax = maxScoreErr(score, labels, errMax, sampleNum)
-    sampleNum = sampleNum+params['trainBatchSize']
+    tf.summary.scalar('loss', lossOp)
+    errDispVar = tf.Variable(0, 'tbVarErrDisp', dtype=tf.float32)
+    errDispPH = tf.placeholder(tf.float32, shape=())
+    errDispSummary = errDispVar.assign(errDispPH)
+    tf.summary.scalar("errDisp", errDispSummary)
+    errMaxVar = tf.Variable(0, 'tbVarErrMax', dtype=tf.float32)
+    errMaxPH = tf.placeholder(tf.float32, shape=())
+    errMaxSummary = errMaxVar.assign(errMaxPH)
+    tf.summary.scalar("errMax", errMaxSummary)
+
+    # updateOps = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+    # with tf.control_dependencies(updateOps): it seems the variables from bn are already included
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate=lr)
+
+    grads = optimizer.compute_gradients(lossOp)
+    for grad, var in grads:
+        if grad is not None:
+            tf.summary.histogram(var.name, var)
+            tf.summary.histogram(var.name+'/gradient', grad)
+
+    trainOp = optimizer.apply_gradients(grads_and_vars=grads)
+    summaryOp = tf.summary.merge_all()
+    writer = tf.summary.FileWriter(opts['summaryFile'])
+    saver = tf.train.Saver()
+
+    sess = tf.Session()
+    sess.run(tf.global_variables_initializer())
+    writer.add_graph(sess.graph)
+
+    step = 0
+    for i in range(opts['start'], opts['trainNumEpochs']):
+        trainSamples = opts['numPairs'] * (1 - opts['validation'])
+        sampleNum = 0
+        errDisp = 0
+        errMax = 0
+        sampleIdx = np.random.permutation(int(trainSamples))
+
+        while sampleNum < trainSamples:
+            batch = sampleIdx[sampleNum:sampleNum+params['trainBatchSize']]
+            imoutZ, imoutX = vidGetRandBatch(imdbInd, imdb, batch, params, opts)
+
+            score = sess.run(scoreOp, feed_dict={exemplarOp: imoutZ,
+                                                 instanceOp: imoutX})
+
+            errDisp = centerThrErr(score, labels, errDisp, sampleNum)
+            errMax = maxScoreErr(score, labels, errMax, sampleNum)
+
+            sess.run(trainOp, feed_dict={exemplarOp: imoutZ,
+                                         instanceOp: imoutX,
+                                         yOp: fixedLabel,
+                                         lr: opts['trainLr']})
+
+            _, _, s = sess.run([errDispSummary, errMaxSummary, summaryOp], feed_dict={errDispPH: errDisp, errMaxPH: errMax})
+            writer.add_summary(s, step)
+
+            sampleNum = sampleNum + params['trainBatchSize']
+            step = step+1
+
+        ckptName = os.path.join(opts['ckptPath'], 'model_epoch'+str(i)+'.ckpt')
+        saveRes = saver.save(sess, ckptName)
+
+        valSamples = opts['numPairs']*opts['validation']
+        sampleNum = 0
+        errDisp = 0
+        errMax = 0
+        sampleIdx = np.random.permutation(int(valSamples))+trainSamples
+        while sampleNum < valSamples:
+            batch = sampleIdx[sampleNum:sampleNum + params['trainBatchSize']]
+            imoutZ, imoutX = vidGetRandBatch(imdbInd, imdb, batch, params, opts)
+
+            score = sess.run(scoreOp, feed_dict={exemplarOp: imoutZ,
+                                                 instanceOp: imoutX})
+
+            errDisp = centerThrErr(score, labels, errDisp, sampleNum)
+            errMax = maxScoreErr(score, labels, errMax, sampleNum)
 
 
     return
