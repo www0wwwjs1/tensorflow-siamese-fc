@@ -136,12 +136,11 @@ def vidSetupData(curation_path, root, crops_train):
                 if True:        #if valids[length(valids)-1] == True
                     imdb.n_valid_objects[i] += 1
                     imdb.valid_trackids[trackId, i] += 1
-                    if trackId+1 > len(validPerTrackids):
+                    while trackId+1 > len(validPerTrackids):
                         tmp = []
-                        tmp.append(np.uint16(targetIdx))
                         validPerTrackids.append(tmp)
-                    else:
-                        validPerTrackids[trackId].append(np.uint16(targetIdx))
+
+                    validPerTrackids[trackId].append(np.uint16(targetIdx))
 
                 targetIdx += 1
 
@@ -192,10 +191,10 @@ def loadImdbFromPkl(curation_path, crops_train):
             imdbObject = pickle.load(objFile)
             imdb.objects.append(imdbObject)
 
-        trackIdNum = np.where(imdb.valid_trackids[:, i] == 0)[0][0]
+        trackIdNum = np.where(imdb.valid_trackids[:, i] > 0)[0][-1]
         validPerTrackids = []
 
-        for j in range(0, trackIdNum):
+        for j in range(0, trackIdNum+1):
             with open(crops_train+imdb.path[i]+"/trackid_%d" % j+".pkl", 'rb') as idFile:
                 validPerTrackid = pickle.load(idFile)
                 validPerTrackids.append(validPerTrackid)

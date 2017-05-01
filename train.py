@@ -69,7 +69,7 @@ def chooseValSet(imdb, opts):
     imdb.set[sizeTrain:] = VAL_SET
 
     imdbInd = {}
-    imdbInd['id'] = range(0, opts['numPairs'])
+    imdbInd['id'] = [i for i in range(0, opts['numPairs'])]
     imdbInd['imageSet'] = np.zeros([opts['numPairs']], dtype='uint8')
     nPairsTrain = round(opts['numPairs']*(1-opts['validation']))
     imdbInd['imageSet'][:nPairsTrain] = TRAIN_SET
@@ -332,13 +332,12 @@ def main(_):
 
     # random seed should be fixed here
     np.random.seed(opts['randomSeed'])
-    with tf.device('/gpu:0'):
-        exemplarOp = tf.placeholder(tf.float32, [params['trainBatchSize'], opts['exemplarSize'], opts['exemplarSize'], 3])
-        instanceOp = tf.placeholder(tf.float32, [params['trainBatchSize'], opts['instanceSize'], opts['instanceSize'], 3])
-        lr = tf.placeholder(tf.float32, shape=())
+    exemplarOp = tf.placeholder(tf.float32, [params['trainBatchSize'], opts['exemplarSize'], opts['exemplarSize'], 3])
+    instanceOp = tf.placeholder(tf.float32, [params['trainBatchSize'], opts['instanceSize'], opts['instanceSize'], 3])
+    lr = tf.placeholder(tf.float32, shape=())
 
-        isTrainingOp = tf.convert_to_tensor(True, dtype='bool', name='is_training')
-        scoreOp = sn.buildNetwork(exemplarOp, instanceOp, isTrainingOp)
+    isTrainingOp = tf.convert_to_tensor(True, dtype='bool', name='is_training')
+    scoreOp = sn.buildNetwork(exemplarOp, instanceOp, isTrainingOp)
 
     labels = np.ones([8], dtype=np.float32)
     respSz = int(scoreOp.get_shape()[1])
@@ -350,36 +349,35 @@ def main(_):
     opts['rgbMeanX'] = rgbMeanX
     opts['rgbVarX'] = rgbVarX
 
-    with tf.device('/gpu:0'):
-        instanceWeightOp = tf.constant(instanceWeight, dtype=tf.float32)
-        yOp = tf.placeholder(tf.float32, fixedLabel.shape)
-        with tf.name_scope("logistic_loss"):
-            lossOp = tf.reduce_mean(sn.loss(scoreOp, yOp, instanceWeightOp))
+    instanceWeightOp = tf.constant(instanceWeight, dtype=tf.float32)
+    yOp = tf.placeholder(tf.float32, fixedLabel.shape)
+    with tf.name_scope("logistic_loss"):
+        lossOp = tf.reduce_mean(sn.loss(scoreOp, yOp, instanceWeightOp))
 
-        tf.summary.scalar('loss', lossOp)
-        errDispVar = tf.Variable(0, 'tbVarErrDisp', dtype=tf.float32)
-        errDispPH = tf.placeholder(tf.float32, shape=())
-        errDispSummary = errDispVar.assign(errDispPH)
-        tf.summary.scalar("errDisp", errDispSummary)
-        errMaxVar = tf.Variable(0, 'tbVarErrMax', dtype=tf.float32)
-        errMaxPH = tf.placeholder(tf.float32, shape=())
-        errMaxSummary = errMaxVar.assign(errMaxPH)
-        tf.summary.scalar("errMax", errMaxSummary)
+    tf.summary.scalar('loss', lossOp)
+    errDispVar = tf.Variable(0, 'tbVarErrDisp', dtype=tf.float32)
+    errDispPH = tf.placeholder(tf.float32, shape=())
+    errDispSummary = errDispVar.assign(errDispPH)
+    tf.summary.scalar("errDisp", errDispSummary)
+    errMaxVar = tf.Variable(0, 'tbVarErrMax', dtype=tf.float32)
+    errMaxPH = tf.placeholder(tf.float32, shape=())
+    errMaxSummary = errMaxVar.assign(errMaxPH)
+    tf.summary.scalar("errMax", errMaxSummary)
 
-        # updateOps = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-        # with tf.control_dependencies(updateOps): it seems the variables from bn are already included
-        optimizer = tf.train.GradientDescentOptimizer(learning_rate=lr)
+    # updateOps = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+    # with tf.control_dependencies(updateOps): it seems the variables from bn are already included
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate=lr)
 
-        grads = optimizer.compute_gradients(lossOp)
-        for grad, var in grads:
-            if grad is not None:
-                tf.summary.histogram(var.name, var)
-                tf.summary.histogram(var.name+'/gradient', grad)
+    grads = optimizer.compute_gradients(lossOp)
+    for grad, var in grads:
+        if grad is not None:
+            tf.summary.histogram(var.name, var)
+            tf.summary.histogram(var.name+'/gradient', grad)
 
-        trainOp = optimizer.apply_gradients(grads_and_vars=grads)
-        summaryOp = tf.summary.merge_all()
-        writer = tf.summary.FileWriter(opts['summaryFile'])
-        saver = tf.train.Saver()
+    trainOp = optimizer.apply_gradients(grads_and_vars=grads)
+    summaryOp = tf.summary.merge_all()
+    writer = tf.summary.FileWriter(opts['summaryFile'])
+    saver = tf.train.Saver()
 
     sess = tf.Session(config=tf.ConfigProto(log_device_placement=True))
     sess.run(tf.global_variables_initializer())
