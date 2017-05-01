@@ -96,7 +96,7 @@ def vidSetupData(curation_path, root, crops_train):
     nVideos = videoIds.shape[0]
     imdb = Imdb(nVideos, MAX_TRACKIDS, videoIds, videoNFrames, videoPaths)
 
-    for i in range(0, 10):      #nVideos
+    for i in range(0, nVideos):      #
         print("Objects from video %d" % i + "/%d" % nVideos)
 
         with open(rootPath+imdb.path[i]+".txt", 'r') as vidFile:
@@ -148,6 +148,7 @@ def vidSetupData(curation_path, root, crops_train):
             imdb.objects.append(imdbObjects)
             imdb.valid_per_trackid.append(validPerTrackids)
             imdb.total_valid_objects += imdb.n_valid_objects[i]
+            print(imdb.valid_trackids[:, i])
 
             vidFile.close()
             print("Found %d" % imdb.n_valid_objects[i] + " valid objects in %d" % imdb.nframes[i] + " frames")
@@ -156,7 +157,6 @@ def vidSetupData(curation_path, root, crops_train):
     imdb = deleteFromImdb(imdb, toDelete)
     toDelete = np.unique(np.where(imdb.valid_trackids == 1)[1])
     imdb = deleteFromImdb(imdb, toDelete)
-
     saveImdbToPkl(imdb, curation_path, crops_train)
     return imdb
 

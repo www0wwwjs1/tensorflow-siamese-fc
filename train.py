@@ -378,8 +378,7 @@ def main(_):
     summaryOp = tf.summary.merge_all()
     writer = tf.summary.FileWriter(opts['summaryFile'])
     saver = tf.train.Saver()
-
-    sess = tf.Session(config=tf.ConfigProto(log_device_placement=True))
+    sess = tf.Session()
     sess.run(tf.global_variables_initializer())
     writer.add_graph(sess.graph)
 
