@@ -8,6 +8,7 @@ import os
 import siamese_net as sn
 from parameters import configParams
 import utils
+import time
 
 def getOpts():
     opts = {}
@@ -27,7 +28,7 @@ def getOpts():
     opts['randomSeed'] = 1
 
     opts['start'] = 0
-    opts['summaryFile'] = './data/test01'
+    opts['summaryFile'] = './data/test_20170501'
     opts['ckptPath'] = './data/'
     return opts
 
@@ -139,7 +140,7 @@ def centerThrErr(score, labels, oldRes, m):
     nStep = 100
     batchSize = score.shape[0]
     posMask = np.where(labels > 0)
-    numPos = posMask.shape[-1]
+    numPos = posMask[0].shape[-1]
 
     res = 0
 
@@ -333,7 +334,7 @@ def main(_):
     np.random.seed(opts['randomSeed'])
     exemplarOp = tf.placeholder(tf.float32, [params['trainBatchSize'], opts['exemplarSize'], opts['exemplarSize'], 3])
     instanceOp = tf.placeholder(tf.float32, [params['trainBatchSize'], opts['instanceSize'], opts['instanceSize'], 3])
-    lr = tf.placeholder(tf.float32, shape=[])
+    lr = tf.placeholder(tf.float32, shape=())
 
     isTrainingOp = tf.convert_to_tensor(True, dtype='bool', name='is_training')
     scoreOp = sn.buildNetwork(exemplarOp, instanceOp, isTrainingOp)
@@ -392,6 +393,7 @@ def main(_):
         sampleIdx = np.random.permutation(int(trainSamples))
 
         while sampleNum < trainSamples:
+            t0 = time.clock()
             batch = sampleIdx[sampleNum:sampleNum+params['trainBatchSize']]
             imoutZ, imoutX = vidGetRandBatch(imdbInd, imdb, batch, params, opts)
 
@@ -404,13 +406,19 @@ def main(_):
             sess.run(trainOp, feed_dict={exemplarOp: imoutZ,
                                          instanceOp: imoutX,
                                          yOp: fixedLabel,
-                                         lr: opts['trainLr']})
+                                         lr: opts['trainLr'][i]})
 
-            _, _, s = sess.run([errDispSummary, errMaxSummary, summaryOp], feed_dict={errDispPH: errDisp, errMaxPH: errMax})
+            _, _, s = sess.run([errDispSummary, errMaxSummary, summaryOp], feed_dict={errDispPH: errDisp,
+                                                                                      errMaxPH: errMax,
+                                                                                      exemplarOp: imoutZ,
+                                                                                      instanceOp: imoutX,
+                                                                                      yOp: fixedLabel,
+                                                                                      lr: opts['trainLr'][i]})
             writer.add_summary(s, step)
 
             sampleNum = sampleNum + params['trainBatchSize']
             step = step+1
+            print('the %d round training is finished in %f' % (step, time.clock()-t0))
 
         ckptName = os.path.join(opts['ckptPath'], 'model_epoch'+str(i)+'.ckpt')
         saveRes = saver.save(sess, ckptName)
