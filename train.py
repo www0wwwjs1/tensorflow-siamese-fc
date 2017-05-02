@@ -393,26 +393,32 @@ def main(_):
         while sampleNum < trainSamples:
             t0 = time.clock()
             batch = sampleIdx[sampleNum:sampleNum+params['trainBatchSize']]
+            # print(batch)
             imoutZ, imoutX = vidGetRandBatch(imdbInd, imdb, batch, params, opts)
+            # t1 = time.clock()-t0
 
             score = sess.run(scoreOp, feed_dict={exemplarOp: imoutZ,
                                                  instanceOp: imoutX})
+            # t2 = time.clock()-t1
 
             errDisp = centerThrErr(score, labels, errDisp, sampleNum)
             errMax = maxScoreErr(score, labels, errMax, sampleNum)
+            # t3 = time.clock()-t2
 
             sess.run(trainOp, feed_dict={exemplarOp: imoutZ,
                                          instanceOp: imoutX,
                                          yOp: fixedLabel,
                                          lr: opts['trainLr'][i]})
+            # t4 = time.clock()-t3
 
-            _, _, s = sess.run([errDispSummary, errMaxSummary, summaryOp], feed_dict={errDispPH: errDisp,
-                                                                                      errMaxPH: errMax,
-                                                                                      exemplarOp: imoutZ,
-                                                                                      instanceOp: imoutX,
-                                                                                      yOp: fixedLabel,
-                                                                                      lr: opts['trainLr'][i]})
-            writer.add_summary(s, step)
+            # _, _, s = sess.run([errDispSummary, errMaxSummary, summaryOp], feed_dict={errDispPH: errDisp,
+            #                                                                           errMaxPH: errMax,
+            #                                                                           exemplarOp: imoutZ,
+            #                                                                           instanceOp: imoutX,
+            #                                                                           yOp: fixedLabel,
+            #                                                                           lr: opts['trainLr'][i]})
+            # writer.add_summary(s, step)
+            # t5 = time.clock()-t4
 
             sampleNum = sampleNum + params['trainBatchSize']
             step = step+1
