@@ -142,8 +142,6 @@ def centerThrErr(score, labels, oldRes, m):
     posMask = np.where(labels > 0)
     numPos = posMask[0].shape[-1]
 
-    res = 0
-
     responses = np.squeeze(score[posMask, :, :, :], axis=(0,))
     half = np.floor(score.shape[1]/2)
     centerLabel = repmat([half, half], numPos, 1)
@@ -155,7 +153,6 @@ def centerThrErr(score, labels, oldRes, m):
         positions[b, :] = [r[0][0], r[1][0]]
 
     res = precisionAuc(positions, centerLabel, radiusInpix/totalStride, nStep)
-
     res = (oldRes*m+res)/(m+batchSize)
     return res
 
@@ -181,7 +178,6 @@ def maxScoreErr(x, yGt, oldRes, m):
             errs[i] = -np.max(score)
 
     res = len(np.where(errs <= 0)[0])
-
     res = (oldRes*m+res)/(m+b)
 
     return res
