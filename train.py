@@ -28,7 +28,7 @@ def getOpts():
     opts['randomSeed'] = 1
 
     opts['start'] = 0
-    opts['summaryFile'] = './data/test_20170501'
+    opts['summaryFile'] = './data/test_20170502'
     opts['ckptPath'] = './data/'
     return opts
 
@@ -369,10 +369,10 @@ def main(_):
     optimizer = tf.train.GradientDescentOptimizer(learning_rate=lr)
 
     grads = optimizer.compute_gradients(lossOp)
-    for grad, var in grads:
-        if grad is not None:
-            tf.summary.histogram(var.name, var)
-            tf.summary.histogram(var.name+'/gradient', grad)
+    # for grad, var in grads:
+    #     if grad is not None:
+    #         tf.summary.histogram(var.name, var)
+    #         tf.summary.histogram(var.name+'/gradient', grad)
 
     trainOp = optimizer.apply_gradients(grads_and_vars=grads)
     summaryOp = tf.summary.merge_all()
@@ -393,36 +393,36 @@ def main(_):
         while sampleNum < trainSamples:
             t0 = time.clock()
             batch = sampleIdx[sampleNum:sampleNum+params['trainBatchSize']]
-            # print(batch)
+            print(batch)
             imoutZ, imoutX = vidGetRandBatch(imdbInd, imdb, batch, params, opts)
-            # t1 = time.clock()-t0
+            t1 = time.clock()-t0
 
             score = sess.run(scoreOp, feed_dict={exemplarOp: imoutZ,
                                                  instanceOp: imoutX})
-            # t2 = time.clock()-t1
+            t2 = time.clock()-t1
 
             errDisp = centerThrErr(score, labels, errDisp, sampleNum)
             errMax = maxScoreErr(score, labels, errMax, sampleNum)
-            # t3 = time.clock()-t2
+            t3 = time.clock()-t2
 
             sess.run(trainOp, feed_dict={exemplarOp: imoutZ,
                                          instanceOp: imoutX,
                                          yOp: fixedLabel,
                                          lr: opts['trainLr'][i]})
-            # t4 = time.clock()-t3
+            t4 = time.clock()-t3
 
-            # _, _, s = sess.run([errDispSummary, errMaxSummary, summaryOp], feed_dict={errDispPH: errDisp,
-            #                                                                           errMaxPH: errMax,
-            #                                                                           exemplarOp: imoutZ,
-            #                                                                           instanceOp: imoutX,
-            #                                                                           yOp: fixedLabel,
-            #                                                                           lr: opts['trainLr'][i]})
-            # writer.add_summary(s, step)
-            # t5 = time.clock()-t4
+            _, _, s = sess.run([errDispSummary, errMaxSummary, summaryOp], feed_dict={errDispPH: errDisp,
+                                                                                      errMaxPH: errMax,
+                                                                                      exemplarOp: imoutZ,
+                                                                                      instanceOp: imoutX,
+                                                                                      yOp: fixedLabel,
+                                                                                      lr: opts['trainLr'][i]})
+            writer.add_summary(s, step)
+            t5 = time.clock()-t4
 
             sampleNum = sampleNum + params['trainBatchSize']
             step = step+1
-            print('the %d round training is finished in %f' % (step, time.clock()-t0))
+            print('the %d round training is finished in %f, %f, %f, %f, %f' % (step, t1, t2, t3, t4, t5))
 
         ckptName = os.path.join(opts['ckptPath'], 'model_epoch'+str(i)+'.ckpt')
         saveRes = saver.save(sess, ckptName)
