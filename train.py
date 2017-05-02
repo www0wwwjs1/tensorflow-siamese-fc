@@ -28,7 +28,7 @@ def getOpts():
     opts['randomSeed'] = 1
 
     opts['start'] = 0
-    opts['summaryFile'] = './data/test_20170502'
+    opts['summaryFile'] = './data/test_20170502_comp'
     opts['ckptPath'] = './data/'
     return opts
 
@@ -393,23 +393,17 @@ def main(_):
         while sampleNum < trainSamples:
             t0 = time.clock()
             batch = sampleIdx[sampleNum:sampleNum+params['trainBatchSize']]
-            print(batch)
             imoutZ, imoutX = vidGetRandBatch(imdbInd, imdb, batch, params, opts)
-            t1 = time.clock()-t0
 
             score = sess.run(scoreOp, feed_dict={exemplarOp: imoutZ,
                                                  instanceOp: imoutX})
-            t2 = time.clock()-t1
-
             errDisp = centerThrErr(score, labels, errDisp, sampleNum)
             errMax = maxScoreErr(score, labels, errMax, sampleNum)
-            t3 = time.clock()-t2
 
             sess.run(trainOp, feed_dict={exemplarOp: imoutZ,
                                          instanceOp: imoutX,
                                          yOp: fixedLabel,
                                          lr: opts['trainLr'][i]})
-            t4 = time.clock()-t3
 
             _, _, s = sess.run([errDispSummary, errMaxSummary, summaryOp], feed_dict={errDispPH: errDisp,
                                                                                       errMaxPH: errMax,
@@ -418,11 +412,10 @@ def main(_):
                                                                                       yOp: fixedLabel,
                                                                                       lr: opts['trainLr'][i]})
             writer.add_summary(s, step)
-            t5 = time.clock()-t4
 
             sampleNum = sampleNum + params['trainBatchSize']
             step = step+1
-            print('the %d round training is finished in %f, %f, %f, %f, %f' % (step, t1, t2, t3, t4, t5))
+            print('the %d round training is finished in %f' % (step, time.clock()-t0))
 
         ckptName = os.path.join(opts['ckptPath'], 'model_epoch'+str(i)+'.ckpt')
         saveRes = saver.save(sess, ckptName)
@@ -433,6 +426,7 @@ def main(_):
         errMax = 0
         sampleIdx = np.random.permutation(int(valSamples))+trainSamples
         while sampleNum < valSamples:
+            t0 = time.clock()
             batch = sampleIdx[sampleNum:sampleNum + params['trainBatchSize']]
             imoutZ, imoutX = vidGetRandBatch(imdbInd, imdb, batch, params, opts)
 
@@ -442,11 +436,18 @@ def main(_):
             errDisp = centerThrErr(score, labels, errDisp, sampleNum)
             errMax = maxScoreErr(score, labels, errMax, sampleNum)
 
+            _, _, s = sess.run([errDispSummary, errMaxSummary, summaryOp], feed_dict={errDispPH: errDisp,
+                                                                                      errMaxPH: errMax,
+                                                                                      exemplarOp: imoutZ,
+                                                                                      instanceOp: imoutX,
+                                                                                      yOp: fixedLabel,
+                                                                                      lr: opts['trainLr'][i]})
+            writer.add_summary(s, step)
+            sampleNum = sampleNum + params['trainBatchSize']
+            step = step + 1
+            print('the %d round validation is finished in %f' % (step, time.clock() - t0))
 
     return
-
-
-
 
 if __name__ == '__main__':
     tf.app.run()
