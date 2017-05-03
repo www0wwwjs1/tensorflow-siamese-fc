@@ -28,7 +28,7 @@ def getOpts():
     opts['randomSeed'] = 1
 
     opts['start'] = 0
-    opts['summaryFile'] = './data/test_20170502_comp'
+    opts['summaryFile'] = './data/test_20170503_comp'
     opts['ckptPath'] = './data/'
     return opts
 
@@ -379,6 +379,7 @@ def main(_):
     writer.add_graph(sess.graph)
 
     step = 0
+    epochStep = opts['numPairs']/params['trainBatchSize']
     for i in range(opts['start'], opts['trainNumEpochs']):
         trainSamples = opts['numPairs'] * (1 - opts['validation'])
         sampleNum = 0
@@ -411,7 +412,7 @@ def main(_):
 
             sampleNum = sampleNum + params['trainBatchSize']
             step = step+1
-            print('the %d round training is finished in %f' % (step, time.clock()-t0))
+            print('the %d epoch %d round training is finished in %f' % (i, np.mod(step, epochStep), time.clock()-t0))
 
         ckptName = os.path.join(opts['ckptPath'], 'model_epoch'+str(i)+'.ckpt')
         saveRes = saver.save(sess, ckptName)
@@ -441,7 +442,7 @@ def main(_):
             writer.add_summary(s, step)
             sampleNum = sampleNum + params['trainBatchSize']
             step = step + 1
-            print('the %d round validation is finished in %f' % (step, time.clock() - t0))
+            print('the %d epoch %d round validation is finished in %f' % (i, np.mod(step, epochStep), time.clock() - t0))
 
     return
 
