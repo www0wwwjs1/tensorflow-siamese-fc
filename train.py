@@ -420,7 +420,7 @@ def main(_):
         sampleNum = 0
         errDisp = 0
         errMax = 0
-        sampleIdx = np.random.permutation(int(valSamples))+trainSamples
+        sampleIdx = np.random.permutation(int(valSamples))+int(trainSamples)
         while sampleNum < valSamples:
             t0 = time.clock()
             batch = sampleIdx[sampleNum:sampleNum + params['trainBatchSize']]
