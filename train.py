@@ -28,7 +28,7 @@ def getOpts():
     opts['randomSeed'] = 1
 
     opts['start'] = 0
-    opts['summaryFile'] = './data/test_20170503_comp'
+    opts['summaryFile'] = './data/test_20170503_test'
     opts['ckptPath'] = './data/'
     return opts
 
@@ -348,7 +348,7 @@ def main(_):
     instanceWeightOp = tf.constant(instanceWeight, dtype=tf.float32)
     yOp = tf.placeholder(tf.float32, fixedLabel.shape)
     with tf.name_scope("logistic_loss"):
-        lossOp = tf.reduce_mean(sn.loss(scoreOp, yOp, instanceWeightOp))
+        lossOp = sn.loss(scoreOp, yOp, instanceWeightOp)
 
     tf.summary.scalar('loss', lossOp)
     errDispVar = tf.Variable(0, 'tbVarErrDisp', dtype=tf.float32)
