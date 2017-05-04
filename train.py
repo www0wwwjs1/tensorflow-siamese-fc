@@ -5,7 +5,8 @@ from numpy.matlib import repmat
 import tensorflow as tf
 import matplotlib.image as mpimg
 import os
-import siamese_net as sn
+
+from siamese_net import SiameseNet
 from parameters import configParams
 import utils
 import time
@@ -26,9 +27,10 @@ def getOpts():
     opts['trainLr'] = np.logspace(-2, -5, opts['trainNumEpochs'])
     opts['trainWeightDecay'] = 5e-04
     opts['randomSeed'] = 1
+    opts['momentum'] = 0.9
 
     opts['start'] = 0
-    opts['summaryFile'] = './data/test_20170503_test'
+    opts['summaryFile'] = './data/test_20170504_2'
     opts['ckptPath'] = './data/'
     return opts
 
@@ -332,8 +334,9 @@ def main(_):
     instanceOp = tf.placeholder(tf.float32, [params['trainBatchSize'], opts['instanceSize'], opts['instanceSize'], 3])
     lr = tf.placeholder(tf.float32, shape=())
 
-    isTrainingOp = tf.convert_to_tensor(True, dtype='bool', name='is_training')
-    scoreOp = sn.buildNetwork(exemplarOp, instanceOp, isTrainingOp)
+    sn = SiameseNet()
+
+    scoreOp = sn.buildNetwork(exemplarOp, instanceOp, isTraining=True)
 
     labels = np.ones([8], dtype=np.float32)
     respSz = int(scoreOp.get_shape()[1])
@@ -360,15 +363,23 @@ def main(_):
     errMaxSummary = errMaxVar.assign(errMaxPH)
     tf.summary.scalar("errMax", errMaxSummary)
 
-    # updateOps = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-    # with tf.control_dependencies(updateOps): it seems the variables from bn are already included
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate=lr)
+    updateOps = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+    for updateOp in updateOps:
+        tf.summary.histogram(updateOp.name, updateOp)
+    with tf.control_dependencies(updateOps): #it seems the variables from bn are already included
+        optimizer = tf.train.MomentumOptimizer(learning_rate=lr, momentum=opts['momentum'])
+        # GradientDescentOptimizer(learning_rate=lr)
 
     grads = optimizer.compute_gradients(lossOp)
-    # for grad, var in grads:
-    #     if grad is not None:
-    #         tf.summary.histogram(var.name, var)
-    #         tf.summary.histogram(var.name+'/gradient', grad)
+    gradsLr = []
+    for grad, var in grads:
+        if grad is not None:
+            if var.name in sn.learningRates:
+                grad *= sn.learningRates[var.name]
+
+            tf.summary.histogram(var.name, var)
+            tf.summary.histogram(var.name+'/gradient', grad)
+            gradsLr.append([grad, var])
 
     trainOp = optimizer.apply_gradients(grads_and_vars=grads)
     summaryOp = tf.summary.merge_all()
