@@ -30,7 +30,7 @@ def getOpts():
     opts['momentum'] = 0.9
 
     opts['start'] = 0
-    opts['summaryFile'] = './data/test_20170505_test1'
+    opts['summaryFile'] = './data/test_20170505_test_reg'
     opts['ckptPath'] = './data/'
     return opts
 

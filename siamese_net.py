@@ -161,7 +161,7 @@ class SiameseNet:
         loss = b+tf.log(tf.exp(-b)+tf.exp(a-b))
         loss = tf.reduce_mean(tf.multiply(weights, loss))
         regularization = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
-        # loss = tf.add_n([loss]+regularization)
+        loss = tf.add_n([loss]+regularization)
 
         return loss
 
