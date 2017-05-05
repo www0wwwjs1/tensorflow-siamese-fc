@@ -75,7 +75,7 @@ class SiameseNet:
             print("Building conv1, bn1, relu1, pooling1...")
             name = tf.get_variable_scope().name
             # outputs = conv1(inputs, 3, 96, 11, 2)
-            outputs = self.conv(inputs, 96, 11, 2, 1, [1.0, 2.0], [1.0, 0.0], opts['trainWeightDecay'])
+            outputs = self.conv(inputs, 96, 11, 2, 1, [1.0, 2.0], [1.0, 0.0], opts['trainWeightDecay'], opts['stddev'])
             outputs = self.batchNormalization(outputs, isTrainingOp, name)
             outputs = tf.nn.relu(outputs)
             outputs = self.maxPool(outputs, 3, 2)
@@ -84,7 +84,7 @@ class SiameseNet:
             print("Building conv2, bn2, relu2, pooling2...")
             name = tf.get_variable_scope().name
             # outputs = conv2(outputs, 48, 256, 5, 1)
-            outputs = self.conv(outputs, 256, 5, 1, 2, [1.0, 2.0], [1.0, 0.0], opts['trainWeightDecay'])
+            outputs = self.conv(outputs, 256, 5, 1, 2, [1.0, 2.0], [1.0, 0.0], opts['trainWeightDecay'], opts['stddev'])
             outputs = self.batchNormalization(outputs, isTrainingOp, name)
             outputs = tf.nn.relu(outputs)
             outputs = self.maxPool(outputs, 3, 2)
@@ -93,7 +93,7 @@ class SiameseNet:
             print("Building conv3, bn3, relu3...")
             name = tf.get_variable_scope().name
             # outputs = conv1(outputs, 256, 384, 3, 1)
-            outputs = self.conv(outputs, 384, 3, 1, 1, [1.0, 2.0], [1.0, 0.0], opts['trainWeightDecay'])
+            outputs = self.conv(outputs, 384, 3, 1, 1, [1.0, 2.0], [1.0, 0.0], opts['trainWeightDecay'], opts['stddev'])
             outputs = self.batchNormalization(outputs, isTrainingOp, name)
             outputs = tf.nn.relu(outputs)
 
@@ -101,23 +101,23 @@ class SiameseNet:
             print("Building conv4, bn4, relu4...")
             name = tf.get_variable_scope().name
             # outputs = conv2(outputs, 192, 384, 3, 1)
-            outputs = self.conv(outputs, 384, 3, 1, 2, [1.0, 2.0], [1.0, 0.0], opts['trainWeightDecay'])
+            outputs = self.conv(outputs, 384, 3, 1, 2, [1.0, 2.0], [1.0, 0.0], opts['trainWeightDecay'], opts['stddev'])
             outputs = self.batchNormalization(outputs, isTrainingOp, name)
             outputs = tf.nn.relu(outputs)
 
         with tf.variable_scope('scala5'):
             print("Building conv5...")
             # outputs = conv2(outputs, 192, 256, 3, 1)
-            outputs = self.conv(outputs, 256, 3, 1, 2, [1.0, 2.0], [1.0, 0.0], opts['trainWeightDecay'])
+            outputs = self.conv(outputs, 256, 3, 1, 2, [1.0, 2.0], [1.0, 0.0], opts['trainWeightDecay'], opts['stddev'])
 
         return outputs
 
-    def conv(self, inputs, filters, size, stride, groups, lrs, wds, wd):
+    def conv(self, inputs, filters, size, stride, groups, lrs, wds, wd, stddev):
         channels = int(inputs.get_shape()[-1])
         groupConv = lambda i, k: tf.nn.conv2d(i, k, strides=[1, stride, stride, 1], padding='VALID')
 
         with tf.variable_scope('conv'):
-            weights = self.getVariable('weights', shape=[size, size, channels / groups, filters], initializer=tf.truncated_normal_initializer(stddev=0.03), weightDecay=wds[0]*wd, dType=tf.float32, trainable=True)
+            weights = self.getVariable('weights', shape=[size, size, channels / groups, filters], initializer=tf.truncated_normal_initializer(stddev=stddev), weightDecay=wds[0]*wd, dType=tf.float32, trainable=True)
             # tf.get_variable('weights', shape=[size, size, channels/groups, filters], initializer=tf.contrib.layers.xavier_initializer(), dtype=tf.float32)
             biases = self.getVariable('biases', shape=[filters, ], initializer=tf.constant_initializer(value=0.1, dtype=tf.float32), weightDecay=wds[1]*wd, dType=tf.float32, trainable=True)
             # tf.get_variable('biases', [filters,], initializer=tf.constant_initializer(value=0.1, dtype=tf.float32))

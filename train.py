@@ -28,6 +28,7 @@ def getOpts():
     opts['trainWeightDecay'] = 5e-04
     opts['randomSeed'] = 1
     opts['momentum'] = 0.9
+    opts['stddev'] = 0.03
 
     opts['start'] = 0
     opts['expName'] = 'test_20170505_'
