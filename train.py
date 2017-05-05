@@ -30,8 +30,9 @@ def getOpts():
     opts['momentum'] = 0.9
 
     opts['start'] = 0
-    opts['summaryFile'] = './data/test_20170505_test_reg'
-    opts['ckptPath'] = './data/'
+    opts['expName'] = 'test_20170505_'
+    opts['summaryFile'] = './data/'+opts['expName']
+    opts['ckptPath'] = './data/ckpt/'+opts['expName']
     return opts
 
 def getEig(mat):
@@ -336,7 +337,7 @@ def main(_):
 
     sn = SiameseNet()
 
-    scoreOp = sn.buildNetwork(exemplarOp, instanceOp, isTraining=True)
+    scoreOp = sn.buildNetwork(exemplarOp, instanceOp, opts, isTraining=True)
 
     labels = np.ones([8], dtype=np.float32)
     respSz = int(scoreOp.get_shape()[1])

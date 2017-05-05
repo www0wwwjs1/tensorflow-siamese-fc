@@ -15,13 +15,13 @@ class SiameseNet:
         self.learningRates = {}
 
 
-    def buildNetwork(self, exemplar, instance, isTraining):
+    def buildNetwork(self, exemplar, instance, opts, isTraining):
         params = configParams()
 
         with tf.variable_scope('siamese') as scope:
-            aFeat = self.buildBranch(exemplar, isTraining)
+            aFeat = self.buildBranch(exemplar, opts, isTraining)
             scope.reuse_variables()
-            score = self.buildBranch(instance, isTraining)
+            score = self.buildBranch(instance, opts, isTraining)
 
             # the conv2d op in tf is used to implement xcorr directly, from theory, the implementation of conv2d is correlation. However, it is necessary to transpose the weights tensor to a input tensor
             # different scales are tackled with slicing the data. Now only 3 scales are considered, but in training, more samples in a batch is also tackled by the same mechanism. Hence more slices is to be implemented here!!
@@ -56,10 +56,10 @@ class SiameseNet:
 
         with tf.variable_scope('adjust'):
             print("Building adjust...")
-            weights = self.getVariable('weights', [1, 1, 1, 1], initializer=tf.constant_initializer(value=0.001, dtype=tf.float32), weightDecay=1.0, dType=tf.float32, trainable=True)
+            weights = self.getVariable('weights', [1, 1, 1, 1], initializer=tf.constant_initializer(value=0.001, dtype=tf.float32), weightDecay=1.0*opts['trainWeightDecay'], dType=tf.float32, trainable=True)
             self.learningRates[weights.name] = 0.0
                 # tf.get_variable('weights', [1, 1, 1, 1], initializer=tf.constant_initializer(value=0.001, dtype=tf.float32))
-            biases = self.getVariable('biases', [1,], initializer=tf.constant_initializer(value=0, dtype=tf.float32), weightDecay=1.0, dType=tf.float32, trainable=True)
+            biases = self.getVariable('biases', [1,], initializer=tf.constant_initializer(value=0, dtype=tf.float32), weightDecay=1.0*opts['trainWeightDecay'], dType=tf.float32, trainable=True)
             self.learningRates[biases.name] = 1.0
                 # tf.get_variable('biases', [1, ], initializer=tf.constant_initializer(value=0, dtype=tf.float32))
             score = tf.nn.conv2d(score, weights, strides=[1, 1, 1, 1], padding='VALID')
@@ -67,7 +67,7 @@ class SiameseNet:
 
         return score
 
-    def buildBranch(self, inputs, isTraining):
+    def buildBranch(self, inputs, opts, isTraining):
         print("Building Siamese branches...")
         isTrainingOp = tf.convert_to_tensor(isTraining, dtype='bool', name='is_training')
 
@@ -75,7 +75,7 @@ class SiameseNet:
             print("Building conv1, bn1, relu1, pooling1...")
             name = tf.get_variable_scope().name
             # outputs = conv1(inputs, 3, 96, 11, 2)
-            outputs = self.conv(inputs, 96, 11, 2, 1, [1.0, 2.0], [1.0, 0.0])
+            outputs = self.conv(inputs, 96, 11, 2, 1, [1.0, 2.0], [1.0, 0.0], opts['trainWeightDecay'])
             outputs = self.batchNormalization(outputs, isTrainingOp, name)
             outputs = tf.nn.relu(outputs)
             outputs = self.maxPool(outputs, 3, 2)
@@ -84,7 +84,7 @@ class SiameseNet:
             print("Building conv2, bn2, relu2, pooling2...")
             name = tf.get_variable_scope().name
             # outputs = conv2(outputs, 48, 256, 5, 1)
-            outputs = self.conv(outputs, 256, 5, 1, 2, [1.0, 2.0], [1.0, 0.0])
+            outputs = self.conv(outputs, 256, 5, 1, 2, [1.0, 2.0], [1.0, 0.0], opts['trainWeightDecay'])
             outputs = self.batchNormalization(outputs, isTrainingOp, name)
             outputs = tf.nn.relu(outputs)
             outputs = self.maxPool(outputs, 3, 2)
@@ -93,7 +93,7 @@ class SiameseNet:
             print("Building conv3, bn3, relu3...")
             name = tf.get_variable_scope().name
             # outputs = conv1(outputs, 256, 384, 3, 1)
-            outputs = self.conv(outputs, 384, 3, 1, 1, [1.0, 2.0], [1.0, 0.0])
+            outputs = self.conv(outputs, 384, 3, 1, 1, [1.0, 2.0], [1.0, 0.0], opts['trainWeightDecay'])
             outputs = self.batchNormalization(outputs, isTrainingOp, name)
             outputs = tf.nn.relu(outputs)
 
@@ -101,25 +101,25 @@ class SiameseNet:
             print("Building conv4, bn4, relu4...")
             name = tf.get_variable_scope().name
             # outputs = conv2(outputs, 192, 384, 3, 1)
-            outputs = self.conv(outputs, 384, 3, 1, 2, [1.0, 2.0], [1.0, 0.0])
+            outputs = self.conv(outputs, 384, 3, 1, 2, [1.0, 2.0], [1.0, 0.0], opts['trainWeightDecay'])
             outputs = self.batchNormalization(outputs, isTrainingOp, name)
             outputs = tf.nn.relu(outputs)
 
         with tf.variable_scope('scala5'):
             print("Building conv5...")
             # outputs = conv2(outputs, 192, 256, 3, 1)
-            outputs = self.conv(outputs, 256, 3, 1, 2, [1.0, 2.0], [1.0, 0.0])
+            outputs = self.conv(outputs, 256, 3, 1, 2, [1.0, 2.0], [1.0, 0.0], opts['trainWeightDecay'])
 
         return outputs
 
-    def conv(self, inputs, filters, size, stride, groups, lrs, wds):
+    def conv(self, inputs, filters, size, stride, groups, lrs, wds, wd):
         channels = int(inputs.get_shape()[-1])
         groupConv = lambda i, k: tf.nn.conv2d(i, k, strides=[1, stride, stride, 1], padding='VALID')
 
         with tf.variable_scope('conv'):
-            weights = self.getVariable('weights', shape=[size, size, channels / groups, filters], initializer=tf.contrib.layers.xavier_initializer(), weightDecay=wds[0], dType=tf.float32, trainable=True)
+            weights = self.getVariable('weights', shape=[size, size, channels / groups, filters], initializer=tf.truncated_normal_initializer(stddev=0.03), weightDecay=wds[0]*wd, dType=tf.float32, trainable=True)
             # tf.get_variable('weights', shape=[size, size, channels/groups, filters], initializer=tf.contrib.layers.xavier_initializer(), dtype=tf.float32)
-            biases = self.getVariable('biases', shape=[filters, ], initializer=tf.constant_initializer(value=0.1, dtype=tf.float32), weightDecay=wds[1], dType=tf.float32, trainable=True)
+            biases = self.getVariable('biases', shape=[filters, ], initializer=tf.constant_initializer(value=0.1, dtype=tf.float32), weightDecay=wds[1]*wd, dType=tf.float32, trainable=True)
             # tf.get_variable('biases', [filters,], initializer=tf.constant_initializer(value=0.1, dtype=tf.float32))
 
         self.learningRates[weights.name] = lrs[0]
