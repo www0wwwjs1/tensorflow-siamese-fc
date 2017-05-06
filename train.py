@@ -33,7 +33,7 @@ def getOpts():
     opts['start'] = 0
     opts['expName'] = 'test_20170505_'
     opts['summaryFile'] = './data/'+opts['expName']
-    opts['ckptPath'] = './data/ckpt/'+opts['expName']
+    opts['ckptPath'] = './ckpt/'+opts['expName']
     return opts
 
 def getEig(mat):
@@ -426,6 +426,9 @@ def main(_):
             sampleNum = sampleNum + params['trainBatchSize']
             step = step+1
             print('the %d epoch %d round training is finished in %f' % (i, np.mod(step, epochStep), time.clock()-t0))
+
+        if not os.path.exists(opts['ckptPath']):
+            os.mkdir(opts['ckptPath'])
 
         ckptName = os.path.join(opts['ckptPath'], 'model_epoch'+str(i)+'.ckpt')
         saveRes = saver.save(sess, ckptName)
