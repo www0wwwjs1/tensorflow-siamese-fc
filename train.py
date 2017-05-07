@@ -5,11 +5,11 @@ from numpy.matlib import repmat
 import tensorflow as tf
 import matplotlib.image as mpimg
 import os
+import time
 
 from siamese_net import SiameseNet
 from parameters import configParams
 import utils
-import time
 
 def getOpts():
     opts = {}
@@ -338,7 +338,7 @@ def main(_):
 
     sn = SiameseNet()
 
-    scoreOp = sn.buildNetwork(exemplarOp, instanceOp, opts, isTraining=True)
+    scoreOp = sn.buildTrainNetwork(exemplarOp, instanceOp, opts)
 
     labels = np.ones([8], dtype=np.float32)
     respSz = int(scoreOp.get_shape()[1])

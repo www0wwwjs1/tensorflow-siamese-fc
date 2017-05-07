@@ -14,14 +14,31 @@ class SiameseNet:
     def __init__(self):
         self.learningRates = {}
 
+    def buildExemplarSubNetwork(self, exemplar, opts):
+        with tf.variable_scope('siamese'):
+            score = self.buildBranch(exemplar, opts, isTraining=False)
 
-    def buildNetwork(self, exemplar, instance, opts, isTraining):
+        return score
+
+    def buildInferenceNetwork(self, instance, opts):
+
+        assert batchAFeat == 1
+        assert batchScore == params['numScale']
+
+        scores = tf.split(axis=0, num_or_size_splits=batchScore, value=score)
+        for i in range(batchScore):
+            scores1 = []
+            scores1.append(tf.nn.conv2d(scores[i], aFeat, strides=[1, 1, 1, 1], padding='VALID'))
+
+        score = tf.concat(axis=0, values=scores1)
+
+    def buildTrainNetwork(self, exemplar, instance, opts):
         params = configParams()
 
         with tf.variable_scope('siamese') as scope:
-            aFeat = self.buildBranch(exemplar, opts, isTraining)
+            aFeat = self.buildBranch(exemplar, opts, isTraining=True) #, name='aFeat'
             scope.reuse_variables()
-            score = self.buildBranch(instance, opts, isTraining)
+            score = self.buildBranch(instance, opts, isTraining=True) #, name='xFeat'
 
             # the conv2d op in tf is used to implement xcorr directly, from theory, the implementation of conv2d is correlation. However, it is necessary to transpose the weights tensor to a input tensor
             # different scales are tackled with slicing the data. Now only 3 scales are considered, but in training, more samples in a batch is also tackled by the same mechanism. Hence more slices is to be implemented here!!
@@ -31,28 +48,19 @@ class SiameseNet:
             batchAFeat = int(aFeat.get_shape()[-1])
             batchScore = int(score.get_shape()[0])
 
-            if batchAFeat > 1:
-                groupConv = lambda i, k: tf.nn.conv2d(i, k, strides=[1, 1, 1, 1], padding='VALID')
+            # if batchAFeat > 1:
+            groupConv = lambda i, k: tf.nn.conv2d(i, k, strides=[1, 1, 1, 1], padding='VALID')
 
-                assert batchAFeat == params['trainBatchSize']
-                assert batchScore == params['trainBatchSize']
+            assert batchAFeat == params['trainBatchSize']
+            assert batchScore == params['trainBatchSize']
 
-                aFeats = tf.split(axis=3, num_or_size_splits=batchAFeat, value=aFeat)
-                scores = tf.split(axis=0, num_or_size_splits=batchScore, value=score)
-                scores = [groupConv(i, k) for i, k in zip(scores, aFeats)]
+            aFeats = tf.split(axis=3, num_or_size_splits=batchAFeat, value=aFeat)
+            scores = tf.split(axis=0, num_or_size_splits=batchScore, value=score)
+            scores = [groupConv(i, k) for i, k in zip(scores, aFeats)]
 
-                score = tf.concat(axis=3, values=scores)
-                score = tf.transpose(score, perm=[3, 1, 2, 0])
-            else:
-                assert batchAFeat == 1
-                assert batchScore == params['numScale']
-
-                scores = tf.split(axis=0, num_or_size_splits=batchScore, value=score)
-                for i in range(batchScore):
-                    scores1 = []
-                    scores1.append(tf.nn.conv2d(scores[i], aFeat, strides=[1, 1, 1, 1], padding='VALID'))
-
-                score = tf.concat(axis=0, values=scores1)
+            score = tf.concat(axis=3, values=scores)
+            score = tf.transpose(score, perm=[3, 1, 2, 0])
+            # else:
 
         with tf.variable_scope('adjust'):
             print("Building adjust...")
@@ -67,7 +75,7 @@ class SiameseNet:
 
         return score
 
-    def buildBranch(self, inputs, opts, isTraining):
+    def buildBranch(self, inputs, opts, isTraining, branchName=None):
         print("Building Siamese branches...")
         isTrainingOp = tf.convert_to_tensor(isTraining, dtype='bool', name='is_training')
 
@@ -108,11 +116,11 @@ class SiameseNet:
         with tf.variable_scope('scala5'):
             print("Building conv5...")
             # outputs = conv2(outputs, 192, 256, 3, 1)
-            outputs = self.conv(outputs, 256, 3, 1, 2, [1.0, 2.0], [1.0, 0.0], opts['trainWeightDecay'], opts['stddev'])
+            outputs = self.conv(outputs, 256, 3, 1, 2, [1.0, 2.0], [1.0, 0.0], opts['trainWeightDecay'], opts['stddev'], name=branchName)
 
         return outputs
 
-    def conv(self, inputs, filters, size, stride, groups, lrs, wds, wd, stddev):
+    def conv(self, inputs, filters, size, stride, groups, lrs, wds, wd, stddev, name=None):
         channels = int(inputs.get_shape()[-1])
         groupConv = lambda i, k: tf.nn.conv2d(i, k, strides=[1, stride, stride, 1], padding='VALID')
 
@@ -134,7 +142,11 @@ class SiameseNet:
 
             conv = tf.concat(axis=3, values=convGroups)
 
-        conv = tf.add(conv, biases)
+        if name is not None:
+            conv = tf.add(conv, biases, name=name)
+        else:
+            conv = tf.add(conv, biases)
+
         print('Layer Type = Conv, Size = %d * %d, Stride = %d, Filters = %d, Input channels = %d, Groups = %d' % (size, size, stride, filters, channels, groups))
 
         return conv
