@@ -20,17 +20,39 @@ class SiameseNet:
 
         return score
 
-    def buildInferenceNetwork(self, instance, opts):
+    def buildInferenceNetwork(self, instance, zFeat, opts):
+        with tf.variable_scope('siamese') as scope:
+            scope.reuse_variables()
+            score = self.buildBranch(instance, opts, isTraining=False)
 
-        assert batchAFeat == 1
-        assert batchScore == params['numScale']
+        with tf.variable_scope('score'):
+            batchAFeat = int(zFeat.get_shape()[-1])
+            batchScore = int(score.get_shape()[0])
 
-        scores = tf.split(axis=0, num_or_size_splits=batchScore, value=score)
-        for i in range(batchScore):
-            scores1 = []
-            scores1.append(tf.nn.conv2d(scores[i], aFeat, strides=[1, 1, 1, 1], padding='VALID'))
+            assert batchAFeat == 1
+            assert batchScore == opts['numScale']
 
-        score = tf.concat(axis=0, values=scores1)
+            scores = tf.split(axis=0, num_or_size_splits=batchScore, value=score)
+            for i in range(batchScore):
+                scores1 = []
+                scores1.append(tf.nn.conv2d(scores[i], zFeat, strides=[1, 1, 1, 1], padding='VALID'))
+
+            score = tf.concat(axis=0, values=scores1)
+
+        with tf.variable_scope('adjust'):
+            print("Building adjust...")
+            weights = self.getVariable('weights', [1, 1, 1, 1],
+                                       initializer=tf.constant_initializer(value=0.001, dtype=tf.float32),
+                                       weightDecay=1.0 * opts['trainWeightDecay'], dType=tf.float32, trainable=True)
+            # tf.get_variable('weights', [1, 1, 1, 1], initializer=tf.constant_initializer(value=0.001, dtype=tf.float32))
+            biases = self.getVariable('biases', [1, ],
+                                      initializer=tf.constant_initializer(value=0, dtype=tf.float32),
+                                      weightDecay=1.0 * opts['trainWeightDecay'], dType=tf.float32, trainable=True)
+            # tf.get_variable('biases', [1, ], initializer=tf.constant_initializer(value=0, dtype=tf.float32))
+            score = tf.nn.conv2d(score, weights, strides=[1, 1, 1, 1], padding='VALID')
+            score = tf.add(score, biases)
+
+        return score
 
     def buildTrainNetwork(self, exemplar, instance, opts):
         params = configParams()

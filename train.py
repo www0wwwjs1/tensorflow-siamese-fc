@@ -4,6 +4,7 @@ import numpy as np
 from numpy.matlib import repmat
 import tensorflow as tf
 import matplotlib.image as mpimg
+# from PIL import Image
 import os
 import time
 
@@ -11,8 +12,7 @@ from siamese_net import SiameseNet
 from parameters import configParams
 import utils
 
-def getOpts():
-    opts = {}
+def getOpts(opts):
     print("config opts...")
 
     opts['validation'] = 0.1
@@ -258,7 +258,7 @@ def acquireAugment(im, imageSize, rgbVar, augOpts):
 
     return imo
 
-def vidGetRandBatch(imdbInd, imdb, batch, params, opts):
+def vidGetRandBatch(imdbInd, imdb, batch, opts):
     TRAIN_SET = 1
     VAL_SET = 2
 
@@ -266,7 +266,7 @@ def vidGetRandBatch(imdbInd, imdb, batch, params, opts):
     assert all(batchSet == imdbInd['imageSet'][batch])
     batchSize = len(batch)
     pairTypesRgb = 1
-    dataDir = params['crops_train']
+    dataDir = opts['crops_train']
 
     idsSet = np.where(imdb.set == batchSet)[0]
     rndVideos = np.random.permutation(idsSet)[:batchSize]
@@ -311,8 +311,8 @@ def vidGetRandBatch(imdbInd, imdb, batch, params, opts):
         augOpts['color'] = False
 
     for i in range(batchSize):
-        imz = mpimg.imread(cropsZStr[i])
-        imx = mpimg.imread(cropsXStr[i])
+        imz = mpimg.imread(cropsZStr[i]) #np.array(Image.open(cropsZStr[i])).astype(np.float32)
+        imx = mpimg.imread(cropsXStr[i]) #np.array(Image.open(cropsXStr[i])).astype(np.float32)
 
         augZ = acquireAugment(imz, opts['exemplarSize'], opts['rgbVarZ'], augOpts)
         augX = acquireAugment(imx, opts['instanceSize'], opts['rgbVarX'], augOpts)
@@ -323,17 +323,17 @@ def vidGetRandBatch(imdbInd, imdb, batch, params, opts):
     return imoutZ, imoutX
 
 def main(_):
-    params = configParams()
-    opts = getOpts()
+    opts = configParams()
+    opts = getOpts(opts)
     # curation.py should be executed once before
-    imdb = utils.loadImdbFromPkl(params['curation_path'], params['crops_train'])
-    rgbMeanZ, rgbVarZ, rgbMeanX, rgbVarX = loadStats(params['curation_path'])
+    imdb = utils.loadImdbFromPkl(opts['curation_path'], opts['crops_train'])
+    rgbMeanZ, rgbVarZ, rgbMeanX, rgbVarX = loadStats(opts['curation_path'])
     imdb, imdbInd = chooseValSet(imdb, opts)
 
     # random seed should be fixed here
     np.random.seed(opts['randomSeed'])
-    exemplarOp = tf.placeholder(tf.float32, [params['trainBatchSize'], opts['exemplarSize'], opts['exemplarSize'], 3])
-    instanceOp = tf.placeholder(tf.float32, [params['trainBatchSize'], opts['instanceSize'], opts['instanceSize'], 3])
+    exemplarOp = tf.placeholder(tf.float32, [opts['trainBatchSize'], opts['exemplarSize'], opts['exemplarSize'], 3])
+    instanceOp = tf.placeholder(tf.float32, [opts['trainBatchSize'], opts['instanceSize'], opts['instanceSize'], 3])
     lr = tf.placeholder(tf.float32, shape=())
 
     sn = SiameseNet()
@@ -344,7 +344,7 @@ def main(_):
     respSz = int(scoreOp.get_shape()[1])
     respSz = [respSz, respSz]
     respStride = 8  # calculated from stride of convolutional layers and pooling layers
-    fixedLabel, instanceWeight = createLabels(respSz, opts['lossRPos']/respStride, opts['lossRNeg']/respStride, params['trainBatchSize'])
+    fixedLabel, instanceWeight = createLabels(respSz, opts['lossRPos']/respStride, opts['lossRNeg']/respStride, opts['trainBatchSize'])
     opts['rgbMeanZ'] = rgbMeanZ
     opts['rgbVarZ'] = rgbVarZ
     opts['rgbMeanX'] = rgbMeanX
@@ -388,11 +388,11 @@ def main(_):
     writer = tf.summary.FileWriter(opts['summaryFile'])
     saver = tf.train.Saver()
     sess = tf.Session()
-    sess.run(tf.global_variables_initializer())
+
     writer.add_graph(sess.graph)
 
     step = 0
-    epochStep = opts['numPairs']/params['trainBatchSize']
+    epochStep = opts['numPairs']/opts['trainBatchSize']
     for i in range(opts['start'], opts['trainNumEpochs']):
         trainSamples = opts['numPairs'] * (1 - opts['validation'])
         sampleNum = 0
@@ -402,8 +402,8 @@ def main(_):
 
         while sampleNum < trainSamples:
             t0 = time.clock()
-            batch = sampleIdx[sampleNum:sampleNum+params['trainBatchSize']]
-            imoutZ, imoutX = vidGetRandBatch(imdbInd, imdb, batch, params, opts)
+            batch = sampleIdx[sampleNum:sampleNum+opts['trainBatchSize']]
+            imoutZ, imoutX = vidGetRandBatch(imdbInd, imdb, batch, opts)
 
             score = sess.run(scoreOp, feed_dict={exemplarOp: imoutZ,
                                                  instanceOp: imoutX})
@@ -423,7 +423,7 @@ def main(_):
                                                                                       lr: opts['trainLr'][i]})
             writer.add_summary(s, step)
 
-            sampleNum = sampleNum + params['trainBatchSize']
+            sampleNum = sampleNum + opts['trainBatchSize']
             step = step+1
             print('the %d epoch %d round training is finished in %f' % (i, np.mod(step, epochStep), time.clock()-t0))
 
@@ -440,8 +440,8 @@ def main(_):
         sampleIdx = np.random.permutation(int(valSamples))+int(trainSamples)
         while sampleNum < valSamples:
             t0 = time.clock()
-            batch = sampleIdx[sampleNum:sampleNum + params['trainBatchSize']]
-            imoutZ, imoutX = vidGetRandBatch(imdbInd, imdb, batch, params, opts)
+            batch = sampleIdx[sampleNum:sampleNum + opts['trainBatchSize']]
+            imoutZ, imoutX = vidGetRandBatch(imdbInd, imdb, batch, opts)
 
             score = sess.run(scoreOp, feed_dict={exemplarOp: imoutZ,
                                                  instanceOp: imoutX})
@@ -456,7 +456,7 @@ def main(_):
                                                                                       yOp: fixedLabel,
                                                                                       lr: opts['trainLr'][i]})
             writer.add_summary(s, step)
-            sampleNum = sampleNum + params['trainBatchSize']
+            sampleNum = sampleNum + opts['trainBatchSize']
             step = step + 1
             print('the %d epoch %d round validation is finished in %f' % (i, np.mod(step, epochStep), time.clock() - t0))
 

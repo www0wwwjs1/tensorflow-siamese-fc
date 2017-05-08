@@ -9,7 +9,7 @@ def configParams():
     params['crops_path'] = params['data_path']+"ILSVRC2015_CROPS/"
     params['crops_train'] = params['crops_path']+"Data/VID/train/"
     params['curation_path'] = "./ILSVRC15-curation/"
-    params['demo_sequences'] = "./demo-sequences/"
+    params['seq_base_path'] = "./demo-sequences/"
     params['trainBatchSize'] = 8
     params['numScale'] = 3
 
