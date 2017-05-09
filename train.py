@@ -31,8 +31,8 @@ def getOpts(opts):
     opts['stddev'] = 0.03
 
     opts['start'] = 0
-    opts['expName'] = 'test_20170505_'
-    opts['summaryFile'] = './data/'+opts['expName']
+    opts['expName'] = '_test_'
+    opts['summaryFile'] = './data_20170509/'+opts['expName']
     opts['ckptPath'] = './ckpt/'+opts['expName']
     return opts
 
@@ -366,8 +366,8 @@ def main(_):
     tf.summary.scalar("errMax", errMaxSummary)
 
     updateOps = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-    for updateOp in updateOps:
-        tf.summary.histogram(updateOp.name, updateOp)
+    # for updateOp in updateOps:
+    #     tf.summary.histogram(updateOp.name, updateOp)
     with tf.control_dependencies(updateOps): #it seems the variables from bn are already included
         optimizer = tf.train.MomentumOptimizer(learning_rate=lr, momentum=opts['momentum'])
         # GradientDescentOptimizer(learning_rate=lr)
@@ -379,8 +379,8 @@ def main(_):
             if var.name in sn.learningRates:
                 grad *= sn.learningRates[var.name]
 
-            tf.summary.histogram(var.name, var)
-            tf.summary.histogram(var.name+'/gradient', grad)
+            # tf.summary.histogram(var.name, var)
+            # tf.summary.histogram(var.name+'/gradient', grad)
             gradsLr.append([grad, var])
 
     trainOp = optimizer.apply_gradients(grads_and_vars=grads)
