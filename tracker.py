@@ -70,7 +70,7 @@ def getAxisAlignedBB(region):
 def frameGenerator(vpath):
     imgs = []
     for imgFile in glob.glob(os.path.join(vpath, "*.jpg")):
-        imgs.append(mpimg.imread(imgFile).astype(np.float))
+        imgs.append(mpimg.imread(imgFile).astype(np.float32))
         # imgs.append(np.array(Image.open(imgFile)).astype(np.float32))
 
     return imgs
@@ -163,7 +163,7 @@ def main(_):
 
     img = imgs[startFrame]
     if(img.shape[-1] == 1):
-        tmp = np.zeros([img.shape[0], img.shape[1], 3], dtype=np.float)
+        tmp = np.zeros([img.shape[0], img.shape[1], 3], dtype=np.float32)
         tmp[:, :, 0] = tmp[:, :, 1] = tmp[:, :, 2] = np.squeeze(img)
         img = tmp
 
