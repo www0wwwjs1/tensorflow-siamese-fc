@@ -34,7 +34,7 @@ def getOpts(opts):
     opts['video'] = 'vot15_bag'
     opts['modelPath'] = './models/'
     opts['modelName'] = opts['modelPath']+"model_epoch30.ckpt"
-    opts['summaryFile'] = './data_track/'+opts['video']+'_3'
+    opts['summaryFile'] = './data_track/'+opts['video']+'_20170509'
 
     return opts
 
@@ -144,23 +144,18 @@ def main(_):
 
     exemplarOp = tf.placeholder(tf.float32, [1, opts['exemplarSize'], opts['exemplarSize'], 3])
     instanceOp = tf.placeholder(tf.float32, [opts['numScale'], opts['instanceSize'], opts['instanceSize'], 3])
+    exemplarOpBak = tf.placeholder(tf.float32, [opts['trainBatchSize'], opts['exemplarSize'], opts['exemplarSize'], 3])
+    instanceOpBak = tf.placeholder(tf.float32, [opts['trainBatchSize'], opts['instanceSize'], opts['instanceSize'], 3])
+
 
     sn = SiameseNet()
-    zFeatOp = sn.buildExemplarSubNetwork(exemplarOp, opts)
-
-    writer = tf.summary.FileWriter(opts['summaryFile'])
+    scoreOpBak = sn.buildTrainNetwork(exemplarOpBak, instanceOpBak, opts)
     saver = tf.train.Saver()
+    writer = tf.summary.FileWriter(opts['summaryFile'])
     sess = tf.Session()
     saver.restore(sess, opts['modelName'])
 
-    zFeatConstantOp = tf.get_variable('zFeatConstant', [6, 6, 256, 1], dtype=tf.float32)
-    score = sn.buildInferenceNetwork(instanceOp, zFeatConstantOp, opts)
-
-    writer.add_graph(sess.graph)
-
-    weights = sess.graph.get_operation_by_name("adjust/weights")
-    test = weights.values()
-    weights = sess.run(test)
+    zFeatOp = sn.buildExemplarSubNetwork(exemplarOp, opts)
 
     imgs, targetPosition, targetSize = loadVideoInfo(opts['seq_base_path'], opts['video'])
     nImgs = len(imgs)
@@ -203,13 +198,11 @@ def main(_):
     zCrop = np.expand_dims(zCrop, axis=0)
     zFeat = sess.run(zFeatOp, feed_dict={exemplarOp: zCrop})
     zFeat = np.transpose(zFeat, [1, 2, 3, 0])
-    sess.run(zFeatConstantOp.assign(zFeat))
 
-    tf.Graph().as_default()
-    sn = SiameseNet()
+    zFeatConstantOp = tf.constant(zFeat, dtype=tf.float32)
+    scoreOp = sn.buildInferenceNetwork(instanceOp, zFeatConstantOp, opts)
 
-    print(zFeat)
-
+    writer.add_graph(sess.graph)
 
 
 
@@ -224,3 +217,24 @@ if __name__=='__main__':
 
     # zFeat = sess.run(zFeatOp, feed_dict={exemplarOp: exemplar})
     # print(zFeat)
+
+    # zFeatConstantOp = tf.get_variable('zFeatConstant', [6, 6, 256, 1], initializer=tf.constant_initializer(value=0.001, dtype=tf.float32), dtype=tf.float32)
+    #
+    #
+    #
+    #
+    # saver = tf.train.Saver()
+    #
+    # sess.run(tf.global_variables_initializer())
+    #
+    #
+    #
+    #
+    # weights = sess.graph.get_operation_by_name("adjust/weights")
+    # test = weights.values()
+    # weights = sess.run(test)
+    #
+    # sess.run(zFeatConstantOp.assign(zFeat))
+    #
+    # tf.Graph().as_default()
+    # sn = SiameseNet()

@@ -15,7 +15,8 @@ class SiameseNet:
         self.learningRates = {}
 
     def buildExemplarSubNetwork(self, exemplar, opts):
-        with tf.variable_scope('siamese'):
+        with tf.variable_scope('siamese') as scope:
+            scope.reuse_variables()
             score = self.buildBranch(exemplar, opts, isTraining=False)
 
         return score
@@ -39,7 +40,8 @@ class SiameseNet:
 
             score = tf.concat(axis=0, values=scores1)
 
-        with tf.variable_scope('adjust'):
+        with tf.variable_scope('adjust') as scope:
+            scope.reuse_variables()
             print("Building adjust...")
             weights = self.getVariable('weights', [1, 1, 1, 1],
                                        initializer=tf.constant_initializer(value=0.001, dtype=tf.float32),

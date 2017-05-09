@@ -388,7 +388,7 @@ def main(_):
     writer = tf.summary.FileWriter(opts['summaryFile'])
     saver = tf.train.Saver()
     sess = tf.Session()
-
+    sess.run(tf.global_variables_initializer())
     writer.add_graph(sess.graph)
 
     step = 0
