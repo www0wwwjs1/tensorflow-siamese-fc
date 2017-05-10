@@ -383,7 +383,7 @@ def main(_):
             # tf.summary.histogram(var.name+'/gradient', grad)
             gradsLr.append([grad, var])
 
-    trainOp = optimizer.apply_gradients(grads_and_vars=grads)
+    trainOp = optimizer.apply_gradients(grads_and_vars=gradsLr)
     summaryOp = tf.summary.merge_all()
     writer = tf.summary.FileWriter(opts['summaryFile'])
     saver = tf.train.Saver()
