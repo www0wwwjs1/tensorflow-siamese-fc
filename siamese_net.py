@@ -56,13 +56,13 @@ class SiameseNet:
 
         return score
 
-    def buildTrainNetwork(self, exemplar, instance, opts, branchType="original"):
+    def buildTrainNetwork(self, exemplar, instance, opts, isTraining=True, branchType="original"):
         params = configParams()
 
         with tf.variable_scope('siamese') as scope:
-            aFeat = self.buildBranch(exemplar, opts, isTraining=True, branchType=branchType) #, name='aFeat'
+            aFeat = self.buildBranch(exemplar, opts, isTraining, branchType=branchType) #, name='aFeat'
             scope.reuse_variables()
-            score = self.buildBranch(instance, opts, isTraining=True, branchType=branchType) #, name='xFeat'
+            score = self.buildBranch(instance, opts, isTraining, branchType=branchType) #, name='xFeat'
 
             # the conv2d op in tf is used to implement xcorr directly, from theory, the implementation of conv2d is correlation. However, it is necessary to transpose the weights tensor to a input tensor
             # different scales are tackled with slicing the data. Now only 3 scales are considered, but in training, more samples in a batch is also tackled by the same mechanism. Hence more slices is to be implemented here!!
@@ -152,7 +152,7 @@ class SiameseNet:
 
         return outputs
 
-    def buildOriBranch(self, inputs, opts, isTraining):
+    def buildOriBranch(self, inputs, opts, isTraining, branchName):
         print("Building Siamese branches...")
         isTrainingOp = tf.convert_to_tensor(isTraining, dtype='bool', name='is_training')
 

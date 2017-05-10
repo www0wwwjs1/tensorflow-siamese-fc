@@ -34,7 +34,7 @@ def getOpts(opts):
     opts['video'] = 'vot15_bag'
     opts['modelPath'] = './models/'
     opts['modelName'] = opts['modelPath']+"model_epoch30.ckpt"
-    opts['summaryFile'] = './data_track/'+opts['video']+'_20170509'
+    opts['summaryFile'] = './data_track/'+opts['video']+'_20170510'
 
     return opts
 
@@ -136,6 +136,44 @@ def getSubWinTracking(img, pos, modelSz, originalSz, avgChans):
 
     return im_patch, im_patch_original
 
+
+def makeScalePyramid(im, targetPosition, in_side_scaled, out_side, avgChans, stats, p):
+    """
+    computes a pyramid of re-scaled copies of the target (centered on TARGETPOSITION)
+    and resizes them to OUT_SIDE. If crops exceed image boundaries they are padded with AVGCHANS.
+
+    """
+    in_side_scaled = np.round(in_side_scaled)
+    max_target_side = int(round(in_side_scaled[-1]))
+    min_target_side = int(round(in_side_scaled[0]))
+    beta = out_side / float(min_target_side)
+    # size_in_search_area = beta * size_in_image
+    # e.g. out_side = beta * min_target_side
+    search_side = int(round(beta * max_target_side))
+    search_region, _ = getSubWinTracking(im, targetPosition, (search_side, search_side),
+                                              (max_target_side, max_target_side), avgChans)
+    if p['subMean']:
+        pass
+    assert round(beta * min_target_side) == int(out_side)
+
+    tmp_list = []
+    tmp_pos = ((search_side - 1) / 2., (search_side - 1) / 2.)
+    for s in range(p['numScale']):
+        target_side = round(beta * in_side_scaled[s])
+        tmp_region, _ = getSubWinTracking(search_region, tmp_pos, (out_side, out_side), (target_side, target_side),
+                                               avgChans)
+        tmp_list.append(tmp_region)
+
+    pyramid = np.stack(tmp_list)
+
+    return pyramid
+
+def trackerEval(score, sx, targetPosition, window, opts):
+    # responseMaps =
+    return
+
+
+
 '''----------------------------------------main-----------------------------------------------------'''
 def main(_):
     print('run tracker...')
@@ -149,12 +187,11 @@ def main(_):
 
 
     sn = SiameseNet()
-    scoreOpBak = sn.buildTrainNetwork(exemplarOpBak, instanceOpBak, opts)
+    scoreOpBak = sn.buildTrainNetwork(exemplarOpBak, instanceOpBak, opts, isTraining=False)
     saver = tf.train.Saver()
     writer = tf.summary.FileWriter(opts['summaryFile'])
     sess = tf.Session()
     saver.restore(sess, opts['modelName'])
-
     zFeatOp = sn.buildExemplarSubNetwork(exemplarOp, opts)
 
     imgs, targetPosition, targetSize = loadVideoInfo(opts['seq_base_path'], opts['video'])
@@ -198,11 +235,32 @@ def main(_):
     zCrop = np.expand_dims(zCrop, axis=0)
     zFeat = sess.run(zFeatOp, feed_dict={exemplarOp: zCrop})
     zFeat = np.transpose(zFeat, [1, 2, 3, 0])
-
     zFeatConstantOp = tf.constant(zFeat, dtype=tf.float32)
     scoreOp = sn.buildInferenceNetwork(instanceOp, zFeatConstantOp, opts)
-
     writer.add_graph(sess.graph)
+
+    resPath = os.path.join(opts['seq_base_path'], opts['video'], 'res')
+    bBoxes = np.zeros([nImgs, 4])
+
+    for i in range(startFrame, nImgs):
+        if i > startFrame:
+            im = imgs[i]
+
+            if(im.shape[-1] == 1):
+                tmp = np.zeros([im.shape[0], im.shape[1], 3], dtype=np.float32)
+                tmp[:, :, 0] = tmp[:, :, 1] = tmp[:, :, 2] = np.squeeze(im)
+                im = tmp
+
+            scaledInstance = sx * scales
+            scaledTarget = np.array([targetSize * scale for scale in scales])
+
+            xCrops = makeScalePyramid(im, targetPosition, scaledInstance, opts['instanceSize'], avgChans, None, opts)
+
+            score = sess.run(scoreOp, feed_dict={instanceOp: xCrops})
+            newTargetPosition, newScale = trackerEval(score, round(sx), targetPosition, window, opts)
+
+
+    return
 
 
 
