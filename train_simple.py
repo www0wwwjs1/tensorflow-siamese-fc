@@ -28,11 +28,11 @@ def getOpts(opts):
     opts['trainWeightDecay'] = 5e-04
     opts['randomSeed'] = 1
     opts['momentum'] = 0.9
-    opts['stddev'] = 0.03
+    opts['stddev'] = 0.01
 
     opts['start'] = 0
-    opts['expName'] = '_test_'
-    opts['summaryFile'] = './data_20170509/'+opts['expName']
+    opts['expName'] = '_20170511_s_tn_001'
+    opts['summaryFile'] = './data_20170511/'+opts['expName']
     opts['ckptPath'] = './ckpt/'+opts['expName']
     return opts
 
