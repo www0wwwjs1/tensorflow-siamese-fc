@@ -122,6 +122,18 @@ def getSubWinTracking(img, pos, modelSz, originalSz, avgChans):
                    constant_values=avgChans[1])
         b = np.pad(img[:, :, 2], ((top_pad, bottom_pad), (left_pad, right_pad)), mode='constant',
                    constant_values=avgChans[2])
+        r = np.expand_dims(r, 2)
+        g = np.expand_dims(g, 2)
+        b = np.expand_dims(b, 2)
+
+        # h, w = r.shape
+        # r1 = np.zeros([h, w, 1], dtype=np.float32)
+        # r1[:, :, 0] = r
+        # g1 = np.zeros([h, w, 1], dtype=np.float32)
+        # g1[:, :, 0] = g
+        # b1 = np.zeros([h, w, 1], dtype=np.float32)
+        # b1[:, :, 0] = b
+
         img = np.concatenate((r, g, b), axis=2)
 
     im_patch_original = img[context_ymin:context_ymax + 1, context_xmin:context_xmax + 1, :]
@@ -184,7 +196,6 @@ def main(_):
     instanceOp = tf.placeholder(tf.float32, [opts['numScale'], opts['instanceSize'], opts['instanceSize'], 3])
     exemplarOpBak = tf.placeholder(tf.float32, [opts['trainBatchSize'], opts['exemplarSize'], opts['exemplarSize'], 3])
     instanceOpBak = tf.placeholder(tf.float32, [opts['trainBatchSize'], opts['instanceSize'], opts['instanceSize'], 3])
-
 
     sn = SiameseNet()
     scoreOpBak = sn.buildTrainNetwork(exemplarOpBak, instanceOpBak, opts, isTraining=False)

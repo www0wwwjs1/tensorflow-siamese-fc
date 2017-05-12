@@ -34,8 +34,8 @@ class SiameseNet:
             assert batchScore == opts['numScale']
 
             scores = tf.split(axis=0, num_or_size_splits=batchScore, value=score)
+            scores1 = []
             for i in range(batchScore):
-                scores1 = []
                 scores1.append(tf.nn.conv2d(scores[i], zFeat, strides=[1, 1, 1, 1], padding='VALID'))
 
             score = tf.concat(axis=0, values=scores1)
