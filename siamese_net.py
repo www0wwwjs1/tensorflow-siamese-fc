@@ -152,9 +152,8 @@ class SiameseNet:
 
         return outputs
 
-    def buildOriBranch(self, inputs, opts, isTraining, branchName):
+    def buildOriBranch(self, inputs, opts, isTrainingOp, branchName):
         print("Building Siamese branches...")
-        isTrainingOp = tf.convert_to_tensor(isTraining, dtype='bool', name='is_training')
 
         with tf.variable_scope('scala1'):
             print("Building conv1, bn1, relu1, pooling1...")

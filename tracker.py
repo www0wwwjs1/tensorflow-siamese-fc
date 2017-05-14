@@ -7,6 +7,7 @@ import glob
 import matplotlib.image as mpimg
 # from PIL import Image
 from skimage import transform
+import cv2
 
 import utils
 from siamese_net import SiameseNet
@@ -191,6 +192,7 @@ def main(_):
     print('run tracker...')
     opts = configParams()
     opts = getOpts(opts)
+
 
     exemplarOp = tf.placeholder(tf.float32, [1, opts['exemplarSize'], opts['exemplarSize'], 3])
     instanceOp = tf.placeholder(tf.float32, [opts['numScale'], opts['instanceSize'], opts['instanceSize'], 3])
