@@ -58,11 +58,12 @@ class SiameseNet:
 
     def buildTrainNetwork(self, exemplar, instance, opts, branchType="original"):
         params = configParams()
+        isTrainingOp = tf.convert_to_tensor(True, dtype='bool', name='is_training')
 
         with tf.variable_scope('siamese') as scope:
-            aFeat = self.buildBranch(exemplar, opts, isTraining=True, branchType=branchType) #, name='aFeat'
+            aFeat = self.buildBranch(exemplar, opts, isTrainingOp, branchType=branchType) #, name='aFeat'
             scope.reuse_variables()
-            score = self.buildBranch(instance, opts, isTraining=True, branchType=branchType) #, name='xFeat'
+            score = self.buildBranch(instance, opts, isTrainingOp, branchType=branchType) #, name='xFeat'
 
             # the conv2d op in tf is used to implement xcorr directly, from theory, the implementation of conv2d is correlation. However, it is necessary to transpose the weights tensor to a input tensor
             # different scales are tackled with slicing the data. Now only 3 scales are considered, but in training, more samples in a batch is also tackled by the same mechanism. Hence more slices is to be implemented here!!
@@ -99,17 +100,16 @@ class SiameseNet:
 
         return score
 
-    def buildBranch(self, inputs, opts, isTraining, branchType="original", branchName=None):
+    def buildBranch(self, inputs, opts, isTrainingOp, branchType="original", branchName=None):
         if branchType == "original":
-            return self.buildOriBranch(inputs, opts, isTraining, branchName)
+            return self.buildOriBranch(inputs, opts, isTrainingOp, branchName)
         elif branchType == "simple":
-            return self.buildSimpleBranch(inputs, opts, isTraining, branchName)
+            return self.buildSimpleBranch(inputs, opts, isTrainingOp, branchName)
         else:
             return
 
-    def buildSimpleBranch(self, inputs, opts, isTraining, branchName):
+    def buildSimpleBranch(self, inputs, opts, isTrainingOp, branchName):
         print("Building Siamese branches...")
-        isTrainingOp = tf.convert_to_tensor(isTraining, dtype='bool', name='is_training')
 
         with tf.variable_scope('scala1'):
             print("Building conv1, bn1, relu1, pooling1...")
