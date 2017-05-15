@@ -28,11 +28,11 @@ def getOpts(opts):
     opts['trainWeightDecay'] = 5e-04
     opts['randomSeed'] = 1
     opts['momentum'] = 0.9
-    opts['stddev'] = 0.03
+    opts['stddev'] = 0.006
 
     opts['start'] = 0
     opts['expName'] = '_test_'
-    opts['summaryFile'] = './data_20170509/'+opts['expName']
+    opts['summaryFile'] = './data_20170515/'+opts['expName']
     opts['ckptPath'] = './ckpt/'+opts['expName']
     return opts
 
@@ -373,7 +373,7 @@ def main(_):
         # GradientDescentOptimizer(learning_rate=lr)
 
     grads = optimizer.compute_gradients(lossOp)
-    gradsLr = []
+    # gradsLr = []
     for grad, var in grads:
         if grad is not None:
             if var.name in sn.learningRates:
@@ -381,9 +381,9 @@ def main(_):
 
             # tf.summary.histogram(var.name, var)
             # tf.summary.histogram(var.name+'/gradient', grad)
-            gradsLr.append([grad, var])
+            # gradsLr.append([grad, var])
 
-    trainOp = optimizer.apply_gradients(grads_and_vars=gradsLr)
+    trainOp = optimizer.apply_gradients(grads_and_vars=grads)
     summaryOp = tf.summary.merge_all()
     writer = tf.summary.FileWriter(opts['summaryFile'])
     saver = tf.train.Saver()
