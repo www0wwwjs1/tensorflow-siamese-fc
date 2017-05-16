@@ -14,17 +14,18 @@ class SiameseNet:
     def __init__(self):
         self.learningRates = {}
 
-    def buildExemplarSubNetwork(self, exemplar, opts):
+    def buildExemplarSubNetwork(self, exemplar, opts, isTrainingOp):
         with tf.variable_scope('siamese') as scope:
             scope.reuse_variables()
-            score = self.buildBranch(exemplar, opts, isTraining=False)
+            score = self.buildBranch(exemplar, opts, isTrainingOp)
 
         return score
 
-    def buildInferenceNetwork(self, instance, zFeat, opts):
+    def buildInferenceNetwork(self, instance, zFeat, opts, isTrainingOp):
+
         with tf.variable_scope('siamese') as scope:
             scope.reuse_variables()
-            score = self.buildBranch(instance, opts, isTraining=False)
+            score = self.buildBranch(instance, opts, isTrainingOp)
 
         with tf.variable_scope('score'):
             batchAFeat = int(zFeat.get_shape()[-1])
@@ -56,9 +57,9 @@ class SiameseNet:
 
         return score
 
-    def buildTrainNetwork(self, exemplar, instance, opts, branchType="original"):
+    def buildTrainNetwork(self, exemplar, instance, opts, isTraining=True, branchType="original"):
         params = configParams()
-        isTrainingOp = tf.convert_to_tensor(True, dtype='bool', name='is_training')
+        isTrainingOp = tf.convert_to_tensor(isTraining, dtype='bool', name='is_training')
 
         with tf.variable_scope('siamese') as scope:
             aFeat = self.buildBranch(exemplar, opts, isTrainingOp, branchType=branchType) #, name='aFeat'

@@ -6,8 +6,9 @@ import numpy as np
 import glob
 import matplotlib.image as mpimg
 # from PIL import Image
-from skimage import transform
+# from skimage import transform
 import cv2
+import scipy.io as sio
 
 import utils
 from siamese_net import SiameseNet
@@ -18,7 +19,8 @@ def getOpts(opts):
 
     opts['numScale'] = 3
     opts['scaleStep'] = 1.0375
-    opts['scalePenalty'] = 0.9745
+    # opts['scalePenalty'] = 0.9745
+    opts['scalePenalty'] = 1/0.9745
     opts['scaleLr'] = 0.59
     opts['responseUp'] = 16
     opts['windowing'] = 'cosine'
@@ -34,7 +36,7 @@ def getOpts(opts):
 
     opts['video'] = 'vot15_bag'
     opts['modelPath'] = './models/'
-    opts['modelName'] = opts['modelPath']+"model_epoch30.ckpt"
+    opts['modelName'] = opts['modelPath']+"model_epoch49.ckpt"
     opts['summaryFile'] = './data_track/'+opts['video']+'_20170510'
 
     return opts
@@ -70,9 +72,18 @@ def getAxisAlignedBB(region):
 
 def frameGenerator(vpath):
     imgs = []
-    for imgFile in glob.glob(os.path.join(vpath, "*.jpg")):
+    imgFiles = [imgFile for imgFile in glob.glob(os.path.join(vpath, "*.jpg"))]
+    for imgFile in imgFiles:
+        if imgFile.find('00000000.jpg') >= 0:
+            imgFiles.remove(imgFile)
+
+    imgFiles.sort()
+
+    for imgFile in imgFiles:
         imgs.append(mpimg.imread(imgFile).astype(np.float32))
         # imgs.append(np.array(Image.open(imgFile)).astype(np.float32))
+        # img = cv2.imread(imgFile).astype(np.float32)
+        # imgs.append(img)
 
     return imgs
 
@@ -135,12 +146,13 @@ def getSubWinTracking(img, pos, modelSz, originalSz, avgChans):
         # b1 = np.zeros([h, w, 1], dtype=np.float32)
         # b1[:, :, 0] = b
 
-        img = np.concatenate((r, g, b), axis=2)
+        img = np.concatenate((r, g, b ), axis=2)
 
     im_patch_original = img[context_ymin:context_ymax + 1, context_xmin:context_xmax + 1, :]
     if not np.array_equal(modelSz, originalSz):
-        im_patch_original = im_patch_original/255.0
-        im_patch = transform.resize(im_patch_original, modelSz)*255.0
+        im_patch = cv2.resize(im_patch_original, modelSz)
+        # im_patch_original = im_patch_original/255.0
+        # im_patch = transform.resize(im_patch_original, modelSz)*255.0
         # im = Image.fromarray(im_patch_original.astype(np.float))
         # im = im.resize(modelSz)
         # im_patch = np.array(im).astype(np.float32)
@@ -182,10 +194,51 @@ def makeScalePyramid(im, targetPosition, in_side_scaled, out_side, avgChans, sta
     return pyramid
 
 def trackerEval(score, sx, targetPosition, window, opts):
-    # responseMaps =
-    return
+    # responseMaps = np.transpose(score[:, :, :, 0], [1, 2, 0])
+    responseMaps = -score[:, :, :, 0]
+    upsz = opts['scoreSize']*opts['responseUp']
+    # responseMapsUp = np.zeros([opts['scoreSize']*opts['responseUp'], opts['scoreSize']*opts['responseUp'], opts['numScale']])
+    responseMapsUP = []
 
+    if opts['numScale'] > 1:
+        currentScaleID = int(opts['numScale']/2)
+        bestScale = currentScaleID
+        bestPeak = -float('Inf')
 
+        for s in range(opts['numScale']):
+            if opts['responseUp'] > 1:
+                responseMapsUP.append(cv2.resize(responseMaps[s, :, :], (upsz, upsz), interpolation=cv2.INTER_CUBIC))
+            else:
+                responseMapsUP.append(responseMaps[s, :, :])
+
+            thisResponse = responseMapsUP[-1]
+
+            if s != currentScaleID:
+                thisResponse = thisResponse*opts['scalePenalty']
+
+            thisPeak = np.max(thisResponse)
+            if thisPeak > bestPeak:
+                bestPeak = thisPeak
+                bestScale = s
+
+        responseMap = responseMapsUP[bestScale]
+    else:
+        responseMap = cv2.resize(responseMaps[0, :, :], (upsz, upsz), interpolation=cv2.INTER_CUBIC)
+        bestScale = 0
+
+    responseMap = responseMap - np.min(responseMap)
+    responseMap = responseMap/np.sum(responseMap)
+
+    responseMap = (1-opts['wInfluence'])*responseMap+opts['wInfluence']*window
+    rMax, cMax = np.unravel_index(responseMap.argmax(), responseMap.shape)
+    pCorr = np.array((rMax, cMax))
+    dispInstanceFinal = pCorr-int(upsz/2)
+    dispInstanceInput = dispInstanceFinal*opts['totalStride']/opts['responseUp']
+    dispInstanceFrame = dispInstanceInput*sx/opts['instanceSize']
+    newTargetPosition = targetPosition+dispInstanceFrame
+    print(bestScale)
+
+    return newTargetPosition, bestScale
 
 '''----------------------------------------main-----------------------------------------------------'''
 def main(_):
@@ -193,11 +246,11 @@ def main(_):
     opts = configParams()
     opts = getOpts(opts)
 
-
     exemplarOp = tf.placeholder(tf.float32, [1, opts['exemplarSize'], opts['exemplarSize'], 3])
     instanceOp = tf.placeholder(tf.float32, [opts['numScale'], opts['instanceSize'], opts['instanceSize'], 3])
     exemplarOpBak = tf.placeholder(tf.float32, [opts['trainBatchSize'], opts['exemplarSize'], opts['exemplarSize'], 3])
     instanceOpBak = tf.placeholder(tf.float32, [opts['trainBatchSize'], opts['instanceSize'], opts['instanceSize'], 3])
+    isTrainingOp = tf.convert_to_tensor(False, dtype='bool', name='is_training')
 
     sn = SiameseNet()
     scoreOpBak = sn.buildTrainNetwork(exemplarOpBak, instanceOpBak, opts, isTraining=False)
@@ -205,25 +258,25 @@ def main(_):
     writer = tf.summary.FileWriter(opts['summaryFile'])
     sess = tf.Session()
     saver.restore(sess, opts['modelName'])
-    zFeatOp = sn.buildExemplarSubNetwork(exemplarOp, opts)
+    zFeatOp = sn.buildExemplarSubNetwork(exemplarOp, opts, isTrainingOp)
 
     imgs, targetPosition, targetSize = loadVideoInfo(opts['seq_base_path'], opts['video'])
     nImgs = len(imgs)
     startFrame = 0
 
-    img = imgs[startFrame]
-    if(img.shape[-1] == 1):
-        tmp = np.zeros([img.shape[0], img.shape[1], 3], dtype=np.float32)
-        tmp[:, :, 0] = tmp[:, :, 1] = tmp[:, :, 2] = np.squeeze(img)
-        img = tmp
+    im = imgs[startFrame]
+    if(im.shape[-1] == 1):
+        tmp = np.zeros([im.shape[0], im.shape[1], 3], dtype=np.float32)
+        tmp[:, :, 0] = tmp[:, :, 1] = tmp[:, :, 2] = np.squeeze(im)
+        im = tmp
 
-    avgChans = np.mean(img, axis=(0, 1))# [np.mean(np.mean(img[:, :, 0])), np.mean(np.mean(img[:, :, 1])), np.mean(np.mean(img[:, :, 2]))]
+    avgChans = np.mean(im, axis=(0, 1))# [np.mean(np.mean(img[:, :, 0])), np.mean(np.mean(img[:, :, 1])), np.mean(np.mean(img[:, :, 2]))]
     wcz = targetSize[1]+opts['contextAmount']*np.sum(targetSize)
     hcz = targetSize[0]+opts['contextAmount']*np.sum(targetSize)
     sz = np.sqrt(wcz*hcz)
     scalez = opts['exemplarSize']/sz
 
-    zCrop, _ = getSubWinTracking(img, targetPosition, [opts['exemplarSize'], opts['exemplarSize']], [np.around(sz), np.around(sz)], avgChans)
+    zCrop, _ = getSubWinTracking(im, targetPosition, (opts['exemplarSize'], opts['exemplarSize']), (np.around(sz), np.around(sz)), avgChans)
 
     if opts['subMean']:
         pass
@@ -232,7 +285,7 @@ def main(_):
     pad = dSearch/scalez
     sx = sz+2*pad
 
-    minSz = 0.2*sx
+    minSx = 0.2*sx
     maxSx = 5.0*sx
 
     winSz = opts['scoreSize']*opts['responseUp']
@@ -249,7 +302,7 @@ def main(_):
     zFeat = sess.run(zFeatOp, feed_dict={exemplarOp: zCrop})
     zFeat = np.transpose(zFeat, [1, 2, 3, 0])
     zFeatConstantOp = tf.constant(zFeat, dtype=tf.float32)
-    scoreOp = sn.buildInferenceNetwork(instanceOp, zFeatConstantOp, opts)
+    scoreOp = sn.buildInferenceNetwork(instanceOp, zFeatConstantOp, opts, isTrainingOp)
     writer.add_graph(sess.graph)
 
     resPath = os.path.join(opts['seq_base_path'], opts['video'], 'res')
@@ -268,10 +321,26 @@ def main(_):
             scaledTarget = np.array([targetSize * scale for scale in scales])
 
             xCrops = makeScalePyramid(im, targetPosition, scaledInstance, opts['instanceSize'], avgChans, None, opts)
+            sio.savemat('pyra.mat', {'xCrops': xCrops})
 
             score = sess.run(scoreOp, feed_dict={instanceOp: xCrops})
+            sio.savemat('score.mat', {'score': score})
+
             newTargetPosition, newScale = trackerEval(score, round(sx), targetPosition, window, opts)
 
+            targetPosition = newTargetPosition
+            sx = max(minSx, min(maxSx, (1-opts['scaleLr'])*sx+opts['scaleLr']*scaledInstance[newScale]))
+            targetSize = (1-opts['scaleLr'])*targetSize+opts['scaleLr']*scaledTarget[newScale]
+        else:
+            pass
+
+        rectPosition = targetPosition-targetSize/2.
+        tl = tuple(np.round(rectPosition).astype(int)[::-1])
+        br = tuple(np.round(rectPosition+targetSize).astype(int)[::-1])
+        imDraw = im.astype(np.uint8)
+        cv2.rectangle(imDraw, tl, br, (0, 255, 255), thickness=3)
+        cv2.imshow("tracking", imDraw)
+        cv2.waitKey(1)
 
     return
 

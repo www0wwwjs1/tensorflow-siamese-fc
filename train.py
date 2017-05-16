@@ -3,10 +3,11 @@
 import numpy as np
 from numpy.matlib import repmat
 import tensorflow as tf
-import matplotlib.image as mpimg
+# import matplotlib.image as mpimg
 # from PIL import Image
 import os
 import time
+import cv2
 
 from siamese_net import SiameseNet
 from parameters import configParams
@@ -311,8 +312,10 @@ def vidGetRandBatch(imdbInd, imdb, batch, opts):
         augOpts['color'] = False
 
     for i in range(batchSize):
-        imz = mpimg.imread(cropsZStr[i]) #np.array(Image.open(cropsZStr[i])).astype(np.float32)
-        imx = mpimg.imread(cropsXStr[i]) #np.array(Image.open(cropsXStr[i])).astype(np.float32)
+        imz = cv2.imread(cropsZStr[i])
+        imx = cv2.imread(cropsXStr[i])
+        # imz = mpimg.imread(cropsZStr[i]) #np.array(Image.open(cropsZStr[i])).astype(np.float32)
+        # imx = mpimg.imread(cropsXStr[i]) #np.array(Image.open(cropsXStr[i])).astype(np.float32)
 
         augZ = acquireAugment(imz, opts['exemplarSize'], opts['rgbVarZ'], augOpts)
         augX = acquireAugment(imx, opts['instanceSize'], opts['rgbVarX'], augOpts)
