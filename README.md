@@ -13,8 +13,8 @@ ref: Fully-Convolutional Siamese Networks for Object Tracking
 - - - -
 
 Prerequisites:
-python: 3.4
-tensorflow: 1.0.1
+
+python: 3.4; tensorflow: 1.0.1
 - - - -
 
 1. [ **Tracking only** ] For tracking, pretrained networks as ckpt file can be plugged into the `tracker.py` directly.
