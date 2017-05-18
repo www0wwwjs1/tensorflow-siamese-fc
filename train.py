@@ -8,8 +8,9 @@ import tensorflow as tf
 import os
 import time
 import cv2
+import scipy.io as sio
 
-from siamese_net import SiameseNet
+from siamese_net import *
 from parameters import configParams
 import utils
 
@@ -29,11 +30,11 @@ def getOpts(opts):
     opts['trainWeightDecay'] = 5e-04
     opts['randomSeed'] = 1
     opts['momentum'] = 0.9
-    opts['stddev'] = 0.006
+    opts['stddev'] = 0.01
 
     opts['start'] = 0
-    opts['expName'] = '_test_'
-    opts['summaryFile'] = './data_20170515/'+opts['expName']
+    opts['expName'] = '20170518_test_2'
+    opts['summaryFile'] = './data_20170518/'+opts['expName']
     opts['ckptPath'] = './ckpt/'+opts['expName']
     return opts
 
@@ -112,6 +113,7 @@ def createLabels(labelSize, rPos, rNeg, batchSize):
     sumP = len(idxP[0])
     sumN = len(idxN[0])
 
+    # instanceWeight = instanceWeight/225.
     instanceWeight[idxP[0], idxP[1]] = 0.5*instanceWeight[idxP[0], idxP[1]]/sumP
     instanceWeight[idxN[0], idxN[1]] = 0.5*instanceWeight[idxN[0], idxN[1]]/sumN
 
@@ -348,6 +350,7 @@ def main(_):
     respSz = [respSz, respSz]
     respStride = 8  # calculated from stride of convolutional layers and pooling layers
     fixedLabel, instanceWeight = createLabels(respSz, opts['lossRPos']/respStride, opts['lossRNeg']/respStride, opts['trainBatchSize'])
+    # sio.savemat('labels.mat', {'fixedLabel': fixedLabel, 'instanceWeight': instanceWeight})
     opts['rgbMeanZ'] = rgbMeanZ
     opts['rgbVarZ'] = rgbVarZ
     opts['rgbMeanX'] = rgbMeanX
@@ -357,6 +360,7 @@ def main(_):
     yOp = tf.placeholder(tf.float32, fixedLabel.shape)
     with tf.name_scope("logistic_loss"):
         lossOp = sn.loss(scoreOp, yOp, instanceWeightOp)
+
 
     tf.summary.scalar('loss', lossOp)
     errDispVar = tf.Variable(0, 'tbVarErrDisp', dtype=tf.float32)
@@ -368,11 +372,13 @@ def main(_):
     errMaxSummary = errMaxVar.assign(errMaxPH)
     tf.summary.scalar("errMax", errMaxSummary)
 
-    updateOps = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+    optimizer = tf.train.MomentumOptimizer(learning_rate=lr, momentum=opts['momentum'])
+
+    # updateOps = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     # for updateOp in updateOps:
-    #     tf.summary.histogram(updateOp.name, updateOp)
-    with tf.control_dependencies(updateOps): #it seems the variables from bn are already included
-        optimizer = tf.train.MomentumOptimizer(learning_rate=lr, momentum=opts['momentum'])
+    #      tf.summary.histogram(updateOp.name, updateOp)
+    # with tf.control_dependencies(updateOps): #it seems the variables from bn are already included
+    #     optimizer = tf.train.MomentumOptimizer(learning_rate=lr, momentum=opts['momentum'])
         # GradientDescentOptimizer(learning_rate=lr)
 
     grads = optimizer.compute_gradients(lossOp)
@@ -385,8 +391,14 @@ def main(_):
             # tf.summary.histogram(var.name, var)
             # tf.summary.histogram(var.name+'/gradient', grad)
             # gradsLr.append([grad, var])
+    gradsOp = optimizer.apply_gradients(grads_and_vars=grads)
 
-    trainOp = optimizer.apply_gradients(grads_and_vars=grads)
+    batchNormUpdates = tf.get_collection(UPDATE_OPS_COLLECTION)
+    # for var in batchNormUpdates:
+    #     tf.summary.histogram(var.name, var)
+    batchNormUpdatesOp = tf.group(*batchNormUpdates)
+    trainOp = tf.group(gradsOp, batchNormUpdatesOp)
+
     summaryOp = tf.summary.merge_all()
     writer = tf.summary.FileWriter(opts['summaryFile'])
     saver = tf.train.Saver()

@@ -4,7 +4,7 @@ import os
 import tensorflow as tf
 import numpy as np
 import glob
-import matplotlib.image as mpimg
+# import matplotlib.image as mpimg
 # from PIL import Image
 # from skimage import transform
 import cv2
@@ -19,8 +19,8 @@ def getOpts(opts):
 
     opts['numScale'] = 3
     opts['scaleStep'] = 1.0375
-    # opts['scalePenalty'] = 0.9745
-    opts['scalePenalty'] = 1/0.9745
+    opts['scalePenalty'] = 0.9745
+    # opts['scalePenalty'] = 1/0.9745
     opts['scaleLr'] = 0.59
     opts['responseUp'] = 16
     opts['windowing'] = 'cosine'
@@ -80,10 +80,10 @@ def frameGenerator(vpath):
     imgFiles.sort()
 
     for imgFile in imgFiles:
-        imgs.append(mpimg.imread(imgFile).astype(np.float32))
+        # imgs.append(mpimg.imread(imgFile).astype(np.float32))
         # imgs.append(np.array(Image.open(imgFile)).astype(np.float32))
-        # img = cv2.imread(imgFile).astype(np.float32)
-        # imgs.append(img)
+        img = cv2.imread(imgFile).astype(np.float32)
+        imgs.append(img)
 
     return imgs
 
@@ -195,7 +195,7 @@ def makeScalePyramid(im, targetPosition, in_side_scaled, out_side, avgChans, sta
 
 def trackerEval(score, sx, targetPosition, window, opts):
     # responseMaps = np.transpose(score[:, :, :, 0], [1, 2, 0])
-    responseMaps = -score[:, :, :, 0]
+    responseMaps = score[:, :, :, 0]
     upsz = opts['scoreSize']*opts['responseUp']
     # responseMapsUp = np.zeros([opts['scoreSize']*opts['responseUp'], opts['scoreSize']*opts['responseUp'], opts['numScale']])
     responseMapsUP = []

@@ -2,11 +2,11 @@
 
 import tensorflow as tf
 from parameters import configParams
-# from tensorflow.python.ops import control_flow_ops
-# from tensorflow.python.training import moving_averages
+from tensorflow.python.ops import control_flow_ops
+from tensorflow.python.training import moving_averages
 
-# MOVING_AVERAGE_DECAY = 0        #only siamese-net in matlab uses 0 here, other projects with tensorflow all use 0.999 here, from some more documents, I think 0.999 is more probable here, since tensorflow uses a equation as 1-decay for this parameter
-# UPDATE_OPS_COLLECTION = 'resnet_update_ops'
+MOVING_AVERAGE_DECAY = 0.9997        #only siamese-net in matlab uses 0 here, other projects with tensorflow all use 0.999 here, from some more documents, I think 0.999 is more probable here, since tensorflow uses a equation as 1-decay for this parameter
+UPDATE_OPS_COLLECTION = 'sf_update_ops'
 
 class SiameseNet:
     learningRates = None
@@ -117,7 +117,7 @@ class SiameseNet:
             name = tf.get_variable_scope().name
             # outputs = conv1(inputs, 3, 96, 11, 2)
             outputs = self.conv(inputs, 96, 11, 2, 1, [1.0, 2.0], [1.0, 0.0], opts['trainWeightDecay'], opts['stddev'])
-            outputs = self.batchNormalization(outputs, isTrainingOp, name)
+            outputs = self.batchNorm(outputs, isTrainingOp) #batchNormalization(outputs, isTrainingOp, name)
             outputs = tf.nn.relu(outputs)
             outputs = self.maxPool(outputs, 3, 2)
 
@@ -126,7 +126,7 @@ class SiameseNet:
             name = tf.get_variable_scope().name
             # outputs = conv2(outputs, 48, 256, 5, 1)
             outputs = self.conv(outputs, 256, 5, 1, 1, [1.0, 2.0], [1.0, 0.0], opts['trainWeightDecay'], opts['stddev'])
-            outputs = self.batchNormalization(outputs, isTrainingOp, name)
+            outputs = self.batchNorm(outputs, isTrainingOp)
             outputs = tf.nn.relu(outputs)
             outputs = self.maxPool(outputs, 3, 2)
 
@@ -135,7 +135,7 @@ class SiameseNet:
             name = tf.get_variable_scope().name
             # outputs = conv1(outputs, 256, 384, 3, 1)
             outputs = self.conv(outputs, 384, 3, 1, 1, [1.0, 2.0], [1.0, 0.0], opts['trainWeightDecay'], opts['stddev'])
-            outputs = self.batchNormalization(outputs, isTrainingOp, name)
+            outputs = self.batchNorm(outputs, isTrainingOp)
             outputs = tf.nn.relu(outputs)
 
         with tf.variable_scope('scala4'):
@@ -143,7 +143,7 @@ class SiameseNet:
             name = tf.get_variable_scope().name
             # outputs = conv2(outputs, 192, 384, 3, 1)
             outputs = self.conv(outputs, 384, 3, 1, 1, [1.0, 2.0], [1.0, 0.0], opts['trainWeightDecay'], opts['stddev'])
-            outputs = self.batchNormalization(outputs, isTrainingOp, name)
+            outputs = self.batchNorm(outputs, isTrainingOp)
             outputs = tf.nn.relu(outputs)
 
         with tf.variable_scope('scala5'):
@@ -161,7 +161,7 @@ class SiameseNet:
             name = tf.get_variable_scope().name
             # outputs = conv1(inputs, 3, 96, 11, 2)
             outputs = self.conv(inputs, 96, 11, 2, 1, [1.0, 2.0], [1.0, 0.0], opts['trainWeightDecay'], opts['stddev'])
-            outputs = self.batchNormalization(outputs, isTrainingOp, name)
+            outputs = self.batchNorm(outputs, isTrainingOp)
             outputs = tf.nn.relu(outputs)
             outputs = self.maxPool(outputs, 3, 2)
 
@@ -170,7 +170,7 @@ class SiameseNet:
             name = tf.get_variable_scope().name
             # outputs = conv2(outputs, 48, 256, 5, 1)
             outputs = self.conv(outputs, 256, 5, 1, 2, [1.0, 2.0], [1.0, 0.0], opts['trainWeightDecay'], opts['stddev'])
-            outputs = self.batchNormalization(outputs, isTrainingOp, name)
+            outputs = self.batchNorm(outputs, isTrainingOp)
             outputs = tf.nn.relu(outputs)
             outputs = self.maxPool(outputs, 3, 2)
 
@@ -179,7 +179,7 @@ class SiameseNet:
             name = tf.get_variable_scope().name
             # outputs = conv1(outputs, 256, 384, 3, 1)
             outputs = self.conv(outputs, 384, 3, 1, 1, [1.0, 2.0], [1.0, 0.0], opts['trainWeightDecay'], opts['stddev'])
-            outputs = self.batchNormalization(outputs, isTrainingOp, name)
+            outputs = self.batchNorm(outputs, isTrainingOp)
             outputs = tf.nn.relu(outputs)
 
         with tf.variable_scope('scala4'):
@@ -187,7 +187,7 @@ class SiameseNet:
             name = tf.get_variable_scope().name
             # outputs = conv2(outputs, 192, 384, 3, 1)
             outputs = self.conv(outputs, 384, 3, 1, 2, [1.0, 2.0], [1.0, 0.0], opts['trainWeightDecay'], opts['stddev'])
-            outputs = self.batchNormalization(outputs, isTrainingOp, name)
+            outputs = self.batchNorm(outputs, isTrainingOp)
             outputs = tf.nn.relu(outputs)
 
         with tf.variable_scope('scala5'):
@@ -203,7 +203,7 @@ class SiameseNet:
 
         with tf.variable_scope('conv'):
             weights = self.getVariable('weights', shape=[size, size, channels / groups, filters], initializer=tf.truncated_normal_initializer(stddev=stddev), weightDecay=wds[0]*wd, dType=tf.float32, trainable=True)
-            # tf.get_variable('weights', shape=[size, size, channels/groups, filters], initializer=tf.contrib.layers.xavier_initializer(), dtype=tf.float32)
+            # tf.get_variable('weights', shape=[size, size, channels/groups, filters], initializer=tf.contrib.layers.xavier_initializer(), dtype=tf.float32) ,
             biases = self.getVariable('biases', shape=[filters, ], initializer=tf.constant_initializer(value=0.1, dtype=tf.float32), weightDecay=wds[1]*wd, dType=tf.float32, trainable=True)
             # tf.get_variable('biases', [filters,], initializer=tf.constant_initializer(value=0.1, dtype=tf.float32))
 
@@ -228,13 +228,39 @@ class SiameseNet:
 
         return conv
 
-    def batchNormalization(self, inputs, isTraining, name):
-        with tf.variable_scope('bn'):
-            output = tf.contrib.layers.batch_norm(inputs, center=True, scale=True, is_training=isTraining, decay=0.997, epsilon=0.0001)
-        self.learningRates[name+'/bn/BatchNorm/gamma:0'] = 2.0
-        self.learningRates[name+'/bn/BatchNorm/beta:0'] = 1.0
+    def batchNorm(self, x, isTraining):
+        shape = x.get_shape()
+        paramsShape = shape[-1:]
 
-        return output
+        axis = list(range(len(shape)-1))
+
+        with tf.variable_scope('bn'):
+            beta = self.getVariable('beta', paramsShape, initializer=tf.constant_initializer(value=0, dtype=tf.float32))
+            self.learningRates[beta.name] = 1.0
+            gamma = self.getVariable('gamma', paramsShape, initializer=tf.constant_initializer(value=1, dtype=tf.float32))
+            self.learningRates[gamma.name] = 2.0
+            movingMean = self.getVariable('moving_mean', paramsShape, initializer=tf.constant_initializer(value=0, dtype=tf.float32), trainable=False)
+            movingVariance = self.getVariable('moving_variance', paramsShape, initializer=tf.constant_initializer(value=1, dtype=tf.float32), trainable=False)
+
+        mean, variance = tf.nn.moments(x, axis)
+        updateMovingMean = moving_averages.assign_moving_average(movingMean, mean, MOVING_AVERAGE_DECAY)
+        updateMovingVariance = moving_averages.assign_moving_average(movingVariance, variance, MOVING_AVERAGE_DECAY)
+        tf.add_to_collection(UPDATE_OPS_COLLECTION, updateMovingMean)
+        tf.add_to_collection(UPDATE_OPS_COLLECTION, updateMovingVariance)
+
+        mean, variance = control_flow_ops.cond(isTraining, lambda : (mean, variance), lambda : (movingMean, movingVariance))
+
+        x = tf.nn.batch_normalization(x, mean, variance, beta, gamma, variance_epsilon=0.001)
+
+        return x
+
+    # def batchNormalization(self, inputs, isTraining, name):
+    #     with tf.variable_scope('bn'):
+    #         output = tf.contrib.layers.batch_norm(inputs, center=True, scale=True, is_training=isTraining, decay=0.997, epsilon=0.0001)
+    #     self.learningRates[name+'/bn/BatchNorm/gamma:0'] = 2.0
+    #     self.learningRates[name+'/bn/BatchNorm/beta:0'] = 1.0
+    #
+    #     return output
 
     def maxPool(self, inputs, kSize, _stride):
         with tf.variable_scope('poll'):
@@ -248,6 +274,8 @@ class SiameseNet:
         a = -tf.multiply(score, y)
         b = tf.nn.relu(a)
         loss = b+tf.log(tf.exp(-b)+tf.exp(a-b))
+        # loss = tf.log(1+tf.exp(a))
+        # loss = tf.reduce_mean(loss)
         loss = tf.reduce_mean(tf.multiply(weights, loss))
         regularization = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
         loss = tf.add_n([loss]+regularization)
