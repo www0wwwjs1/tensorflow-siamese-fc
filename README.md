@@ -4,8 +4,11 @@ A Python+Tensorflow implementation of [siamese-fc](https://github.com/bertinetto
 
 - - - -
 This is the Python+Tensorflow implementation of Fully-Convolutional Siamese Networks for Object Tracking, including both training and tracking.
+
 A Matlab version can be found at [siamese-fc](https://github.com/bertinetto/siamese-fc).
+
 The tracker borrows a lot of code from [py-siamese_fc](https://github.com/GreenKing/py-siamese_fc), many thanks.
+
 ref: Fully-Convolutional Siamese Networks for Object Tracking
 - - - -
 
