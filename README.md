@@ -1,4 +1,3 @@
-# The project is still on working.
 # tensorflow-siamese-fc
 A Python+Tensorflow implementation of [siamese-fc](https://github.com/bertinetto/siamese-fc)
 
@@ -19,7 +18,7 @@ python: 3.4; tensorflow: 1.0.1
 
 1. [ **Tracking only** ] For tracking, pretrained networks as ckpt file can be plugged into the `tracker.py` directly.
    1. Clone the repository.
-   2. A pretrained networks with Imagenet VID dataset can be downloaded soon...
+   2. A pretrained networks with Imagenet VID dataset can be downloaded soon from [baidu pan](https://pan.baidu.com/s/1skCcuLZ), unzip the file to `./models/`.
    3. Execute `tracker.py`, the video sequence (`./demo-sequences/vot15_bag`) is processed as an example.
    
 2. [ **Training** ] To train a model, following steps can be considered.
