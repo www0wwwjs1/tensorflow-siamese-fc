@@ -9,6 +9,7 @@ import glob
 # from skimage import transform
 import cv2
 import scipy.io as sio
+import time
 
 import utils
 from siamese_net import SiameseNet
@@ -36,8 +37,8 @@ def getOpts(opts):
 
     opts['video'] = 'vot15_bag'
     opts['modelPath'] = './models/'
-    opts['modelName'] = opts['modelPath']+"model_epoch49.ckpt"
-    opts['summaryFile'] = './data_track/'+opts['video']+'_20170510'
+    opts['modelName'] = opts['modelPath']+"model_tf.ckpt"
+    opts['summaryFile'] = './data_track/'+opts['video']+'_20170518'
 
     return opts
 
@@ -236,7 +237,7 @@ def trackerEval(score, sx, targetPosition, window, opts):
     dispInstanceInput = dispInstanceFinal*opts['totalStride']/opts['responseUp']
     dispInstanceFrame = dispInstanceInput*sx/opts['instanceSize']
     newTargetPosition = targetPosition+dispInstanceFrame
-    print(bestScale)
+    # print(bestScale)
 
     return newTargetPosition, bestScale
 
@@ -308,6 +309,7 @@ def main(_):
     resPath = os.path.join(opts['seq_base_path'], opts['video'], 'res')
     bBoxes = np.zeros([nImgs, 4])
 
+    tic = time.time()
     for i in range(startFrame, nImgs):
         if i > startFrame:
             im = imgs[i]
@@ -321,7 +323,7 @@ def main(_):
             scaledTarget = np.array([targetSize * scale for scale in scales])
 
             xCrops = makeScalePyramid(im, targetPosition, scaledInstance, opts['instanceSize'], avgChans, None, opts)
-            sio.savemat('pyra.mat', {'xCrops': xCrops})
+            # sio.savemat('pyra.mat', {'xCrops': xCrops})
 
             score = sess.run(scoreOp, feed_dict={instanceOp: xCrops})
             sio.savemat('score.mat', {'score': score})
@@ -342,6 +344,7 @@ def main(_):
         cv2.imshow("tracking", imDraw)
         cv2.waitKey(1)
 
+    print(time.time()-tic)
     return
 
 

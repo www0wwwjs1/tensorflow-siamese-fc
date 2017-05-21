@@ -33,7 +33,7 @@ def getOpts(opts):
     opts['stddev'] = 0.01
 
     opts['start'] = 0
-    opts['expName'] = '20170518_test_2'
+    opts['expName'] = '20170518_tn_o_001'
     opts['summaryFile'] = './data_20170518/'+opts['expName']
     opts['ckptPath'] = './ckpt/'+opts['expName']
     return opts
@@ -401,7 +401,7 @@ def main(_):
 
     summaryOp = tf.summary.merge_all()
     writer = tf.summary.FileWriter(opts['summaryFile'])
-    saver = tf.train.Saver()
+    saver = tf.train.Saver(max_to_keep=40)
     sess = tf.Session()
     sess.run(tf.global_variables_initializer())
     writer.add_graph(sess.graph)
