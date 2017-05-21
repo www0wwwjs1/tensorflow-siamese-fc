@@ -4,7 +4,7 @@ A Python+Tensorflow implementation of [siamese-fc](https://github.com/bertinetto
 - - - -
 This is the Python+Tensorflow implementation of Fully-Convolutional Siamese Networks for Object Tracking, including both training and tracking.
 
-A Matlab version can be found at [siamese-fc](https://github.com/bertinetto/siamese-fc).
+The original Matlab version can be found at [siamese-fc](https://github.com/bertinetto/siamese-fc).
 
 The tracker borrows a lot of code from [py-siamese_fc](https://github.com/GreenKing/py-siamese_fc), many thanks.
 
@@ -18,7 +18,7 @@ python: 3.4; tensorflow: 1.0.1
 
 1. [ **Tracking only** ] For tracking, pretrained networks as ckpt file can be plugged into the `tracker.py` directly.
    1. Clone the repository.
-   2. A pretrained networks with Imagenet VID dataset can be downloaded soon from [baidu pan](https://pan.baidu.com/s/1skCcuLZ), unzip the file to `./models/`.
+   2. A pretrained networks with Imagenet VID dataset can be downloaded from [baidu pan](https://pan.baidu.com/s/1skCcuLZ), unzip the file to `./models/`.
    3. Execute `tracker.py`, the video sequence (`./demo-sequences/vot15_bag`) is processed as an example.
    
 2. [ **Training** ] To train a model, following steps can be considered.
